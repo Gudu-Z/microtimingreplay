@@ -11,7 +11,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.level.ServerLevel;
 import org.jetbrains.annotations.NotNull;
-import org.jspecify.annotations.Nullable;
+import org.jetbrains.annotations.Nullable;
 
 
 public class BlockPosEvent extends MTREvent {
@@ -42,7 +42,7 @@ public class BlockPosEvent extends MTREvent {
         ServerLevel targetLevel = level;
         if (dimension != null && !dimension.isEmpty()) {
             for (ServerLevel sl : level.getServer().getAllLevels()) {
-                if (sl.dimension().identifier().toString().equals(dimension)) {
+                if (sl.dimension().location().toString().equals(dimension)) {
                     targetLevel = sl;
                     break;
                 }

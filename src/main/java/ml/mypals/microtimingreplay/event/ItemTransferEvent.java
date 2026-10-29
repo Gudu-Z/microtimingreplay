@@ -10,7 +10,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Brightness;
 import net.minecraft.world.entity.Display;
@@ -58,7 +58,7 @@ public class ItemTransferEvent extends BlockPosEvent {
     }
 
     public ItemStack createItemStack(ServerLevel level) {
-        Item item = BuiltInRegistries.ITEM.getOptional(Identifier.tryParse(itemId)).orElse(Items.PAPER);
+        Item item = BuiltInRegistries.ITEM.getOptional(ResourceLocation.tryParse(itemId)).orElse(Items.PAPER);
         return new ItemStack(item, count);
     }
 

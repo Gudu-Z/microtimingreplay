@@ -30,13 +30,13 @@ public abstract class EntityRecordingMixin {
     private void mtr$onEntityRemovedFromWorld(CallbackInfo ci) {
         Entity entity = (Entity) (Object) this;
         if (entity.level().isClientSide()) return;
-        if (entity.entityTags().contains(EntityReplayManager.REPLAY_ENTITY_TAG)) return;
+        if (entity.getTags().contains(EntityReplayManager.REPLAY_ENTITY_TAG)) return;
 
         if (MTRState.isRecording(entity.level())) {
             if (!RecordingFilterConfig.isEnabled("entity_despawn")) return;
             MTRProfile activeProfile = MTRState.getActiveProfile();
             if (activeProfile != null) {
-                String dim = entity.level().dimension().identifier().toString();
+                String dim = entity.level().dimension().location().toString();
                 if (!activeProfile.outsideAreaVec3(entity.position(), dim)) {
                     long currentTick = MicroTimingReplay.server.getTickCount() - MTRState.getRecordStartTick();
 
@@ -60,7 +60,7 @@ public abstract class EntityRecordingMixin {
     @WrapMethod(method = "move")
     private void mtr$onEntityMove(MoverType type, Vec3 vec, Operation<Void> original) {
         Entity entity = (Entity) (Object) this;
-        if (entity.level().isClientSide() || entity.entityTags().contains(EntityReplayManager.REPLAY_ENTITY_TAG)) {
+        if (entity.level().isClientSide() || entity.getTags().contains(EntityReplayManager.REPLAY_ENTITY_TAG)) {
             original.call(type, vec);
             return;
         }
@@ -76,7 +76,7 @@ public abstract class EntityRecordingMixin {
 
             MTRProfile activeProfile = MTRState.getActiveProfile();
             if (activeProfile != null) {
-                String dim = entity.level().dimension().identifier().toString();
+                String dim = entity.level().dimension().location().toString();
                 Vec3 oldPos = entity.position();
 
                 original.call(type, vec);

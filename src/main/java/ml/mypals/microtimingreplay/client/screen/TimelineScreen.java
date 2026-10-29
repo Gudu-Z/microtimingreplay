@@ -2,7 +2,6 @@ package ml.mypals.microtimingreplay.client.screen;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
-import org.jspecify.annotations.NonNull;
 import org.lwjgl.glfw.GLFW;
 import ml.mypals.microtimingreplay.client.ClientReplayState;
 import ml.mypals.microtimingreplay.client.MTRClientConfig;
@@ -13,8 +12,8 @@ import ml.mypals.microtimingreplay.network.MTRPayloads;
 import ml.mypals.microtimingreplay.util.MTRComponent;
 import ml.mypals.microtimingreplay.util.MTRHelpText;
 import net.minecraft.ChatFormatting;
-import net.minecraft.util.Util;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.Util;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Tooltip;
@@ -510,26 +509,26 @@ public class TimelineScreen extends Screen {
 
 
     @Override
-    public void extractBackground(@NonNull GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         // Everything the default does is screen-wide paint we do not want — except this,
         // which is the accessibility sound subtitles and has nothing to do with the background.
-        this.minecraft.gui.extractDeferredSubtitles();
+        this.minecraft.gui.renderDeferredSubtitles();
     }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         int listBottom = listBottom();
 
         graphics.fill(0, 0, this.width, LIST_TOP - 2, MTRWidgets.CHROME_BG);
         graphics.fill(0, listBottom + 2, this.width, this.height, MTRWidgets.CHROME_BG);
 
-        graphics.text(this.font, headerLine(), 8, 8, MTRWidgets.TEXT);
+        graphics.drawString(this.font, headerLine(), 8, 8, MTRWidgets.TEXT);
 
         MTRWidgets.panel(graphics, LIST_X, LIST_TOP - 2, panelWidth, listBottom - LIST_TOP + 4,
                 MTRWidgets.PANEL_BG, MTRWidgets.PANEL_BORDER);
 
         if (rows().isEmpty()) {
-            graphics.text(this.font,
+            graphics.drawString(this.font,
                     MTRComponent.translatable("mtr.timeline.empty", "No timeline — watch a running replay first"),
                     LIST_X + 8, LIST_TOP + 6, MTRWidgets.TEXT_DIM);
         } else {
@@ -542,7 +541,7 @@ public class TimelineScreen extends Screen {
 
         drawDetails(graphics, mouseX, mouseY);
 
-        super.extractRenderState(graphics, mouseX, mouseY, partialTick);
+        super.render(graphics, mouseX, mouseY, partialTick);
 
         if (helpOpen) {
             drawHelp(graphics);
@@ -550,13 +549,13 @@ public class TimelineScreen extends Screen {
 
         if (searching()) {
             Component status = searchStatus();
-            graphics.text(this.font, status,
+            graphics.drawString(this.font, status,
                     searchBox.getX() - 6 - this.font.width(status), searchBox.getY() + 3,
                     matches.isEmpty() ? MTRWidgets.TEXT_OFF : MTRWidgets.TEXT_ACCENT);
         }
     }
 
-    private void drawRows(GuiGraphicsExtractor graphics, int mouseX, int mouseY, int listBottom) {
+    private void drawRows(GuiGraphics graphics, int mouseX, int mouseY, int listBottom) {
         List<MTRPayloads.TimelineRow> rows = rows();
         int cursorRow = ClientReplayState.cursorRow();
         int labelRight = labelRight();
@@ -575,7 +574,7 @@ public class TimelineScreen extends Screen {
 
             if (row.tick() != previousTick) {
                 if (y + ROW_HEIGHT > listBottom) break;
-                graphics.text(this.font,
+                graphics.drawString(this.font,
                         MTRComponent.translatable("mtr.timeline.tick_marker", "── Tick %d ──", row.tick()),
                         labelLeft(), y + 1, MTRWidgets.TEXT_DIM);
                 previousTick = row.tick();
@@ -605,14 +604,14 @@ public class TimelineScreen extends Screen {
             graphics.enableScissor(LIST_X + 1, y, labelRight, y + ROW_HEIGHT);
             int x = labelLeft() + rowIndent(row) - hScroll;
             if (hasChildren(rowIndex)) {
-                graphics.text(this.font, Component.literal(collapsed.contains(rowIndex) ? "[+]" : "[-]"),
+                graphics.drawString(this.font, Component.literal(collapsed.contains(rowIndex) ? "[+]" : "[-]"),
                         x, y + 1, MTRWidgets.TEXT_ACCENT);
             }
-            graphics.text(this.font, row.label(), x + 20, y + 1, MTRWidgets.opaque(row.color()));
+            graphics.drawString(this.font, row.label(), x + 20, y + 1, MTRWidgets.opaque(row.color()));
             graphics.disableScissor();
 
             Component jump = Component.literal("#" + row.step() + "↗");
-            graphics.text(this.font, jump, contentRight - 2 - this.font.width(jump), y + 1,
+            graphics.drawString(this.font, jump, contentRight - 2 - this.font.width(jump), y + 1,
                     row.step() == selectedStep ? MTRWidgets.TEXT_ACCENT : MTRWidgets.TEXT_DIM);
 
             y += ROW_HEIGHT;
@@ -626,7 +625,7 @@ public class TimelineScreen extends Screen {
         return row.depth() * INDENT;
     }
 
-    private void drawScrollbars(GuiGraphicsExtractor graphics) {
+    private void drawScrollbars(GuiGraphics graphics) {
         int rowsOnScreen = visibleRowCount();
         int right = listRight();
         int rowsBottom = rowsBottom();
@@ -726,7 +725,7 @@ public class TimelineScreen extends Screen {
         return cachedView;
     }
 
-    private void drawDetails(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+    private void drawDetails(GuiGraphics graphics, int mouseX, int mouseY) {
         int x = detailX();
         int listBottom = listBottom();
         MTRWidgets.panel(graphics, x, LIST_TOP - 2, panelWidth, listBottom - LIST_TOP + 4,
@@ -735,18 +734,18 @@ public class TimelineScreen extends Screen {
         stackHeaderRect = ScreenRectangle.empty();
 
         if (selectedStep < 0) {
-            graphics.text(this.font,
+            graphics.drawString(this.font,
                     MTRComponent.translatable("mtr.timeline.no_selection", "Select a row to inspect it"),
                     x + 6, LIST_TOP + 1, MTRWidgets.TEXT_DIM);
             return;
         }
 
-        graphics.text(this.font, MTRComponent.translatable("mtr.timeline.details", "Step #%d", selectedStep),
+        graphics.drawString(this.font, MTRComponent.translatable("mtr.timeline.details", "Step #%d", selectedStep),
                 x + 6, LIST_TOP + 1, MTRWidgets.TEXT_ACCENT);
 
         MTRPayloads.DetailsS2C details = ClientReplayState.details(selectedStep);
         if (details == null) {
-            graphics.text(this.font, MTRComponent.translatable("mtr.timeline.loading", "Loading…"),
+            graphics.drawString(this.font, MTRComponent.translatable("mtr.timeline.loading", "Loading…"),
                     x + 6, LIST_TOP + ROW_HEIGHT + 1, MTRWidgets.TEXT_DIM);
             return;
         }
@@ -762,7 +761,7 @@ public class TimelineScreen extends Screen {
         int summaryY = summaryTop;
         for (int i = summaryScroll; i < view.summary().size() && summaryY < summaryBottom; i++) {
             DetailLine line = view.summary().get(i);
-            graphics.text(this.font, line.text(), x + 6, summaryY + 1, line.color());
+            graphics.drawString(this.font, line.text(), x + 6, summaryY + 1, line.color());
             summaryY += ROW_HEIGHT;
         }
         graphics.disableScissor();
@@ -781,7 +780,7 @@ public class TimelineScreen extends Screen {
                     stackHeaderRect.left() + stackHeaderRect.width(),
                     stackHeaderRect.top() + stackHeaderRect.height(), 0x30FFFFFF);
         }
-        graphics.text(this.font, header, x + 6, headerY,
+        graphics.drawString(this.font, header, x + 6, headerY,
                 copiedRecently() ? MTRWidgets.TEXT_ON : MTRWidgets.TEXT_ACCENT);
 
         clampDetailScroll();
@@ -793,7 +792,7 @@ public class TimelineScreen extends Screen {
         int lineY = bodyTop;
         for (int i = detailScroll; i < view.trace().size() && lineY < bodyBottom; i++) {
             DetailLine line = view.trace().get(i);
-            graphics.text(this.font, line.text(), detailContentLeft() - detailHScroll, lineY + 1, line.color());
+            graphics.drawString(this.font, line.text(), detailContentLeft() - detailHScroll, lineY + 1, line.color());
             lineY += ROW_HEIGHT;
         }
         graphics.disableScissor();
@@ -818,7 +817,7 @@ public class TimelineScreen extends Screen {
         summaryScroll = Math.clamp(summaryScroll, 0, Math.max(0, detailSummaryLines() - detailSummaryRowCount()));
     }
 
-    private void drawSummaryScrollbar(GuiGraphicsExtractor graphics, int lineCount, int top, int bottom) {
+    private void drawSummaryScrollbar(GuiGraphics graphics, int lineCount, int top, int bottom) {
         int rowsOnScreen = detailSummaryRowCount();
         if (lineCount <= rowsOnScreen) return;
 
@@ -833,7 +832,7 @@ public class TimelineScreen extends Screen {
                 dragging == Drag.SUMMARY_V ? MTRWidgets.SCROLL_THUMB_ACTIVE : MTRWidgets.SCROLL_THUMB);
     }
 
-    private void drawDetailScrollbars(GuiGraphicsExtractor graphics, int lineCount, int bodyBottom) {
+    private void drawDetailScrollbars(GuiGraphics graphics, int lineCount, int bodyBottom) {
         int rowsOnScreen = detailBodyRowCount();
         if (lineCount > rowsOnScreen) {
             int right = detailX() + panelWidth;
@@ -922,7 +921,7 @@ public class TimelineScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(@NonNull MouseButtonEvent event, boolean doubled) {
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubled) {
         if (helpOpen) {
             helpOpen = false;
             return true;
@@ -1194,7 +1193,7 @@ public class TimelineScreen extends Screen {
     }
 
     @Override
-    public boolean mouseDragged(@NonNull MouseButtonEvent event, double dragX, double dragY) {
+    public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
         switch (dragging) {
             case TIMELINE_V -> applyTimelineVDrag(event.y());
             case TIMELINE_H -> applyTimelineHDrag(event.x());
@@ -1218,7 +1217,7 @@ public class TimelineScreen extends Screen {
     }
 
     @Override
-    public boolean mouseReleased(@NonNull MouseButtonEvent event) {
+    public boolean mouseReleased(MouseButtonEvent event) {
         if (dragging != Drag.NONE) {
             endDrag();
             return true;
@@ -1228,12 +1227,13 @@ public class TimelineScreen extends Screen {
 
 
     private boolean matchesHideGui(KeyEvent event) {
-        return this.minecraft.options.keyToggleGui.matches(event);
+        // Minecraft 1.21.10 handles hide-GUI as a fixed F1 key, not a KeyMapping.
+        return event.key() == GLFW.GLFW_KEY_F1;
     }
 
     // Manual---
 
-    private void drawHelp(GuiGraphicsExtractor graphics) {
+    private void drawHelp(GuiGraphics graphics) {
         List<MTRHelpText.Line> help = MTRHelpText.lines(MTRHelpText.TIMELINE_KEY, MTRHelpText.TIMELINE_FALLBACK);
         if (help.isEmpty()) return;
 
@@ -1266,13 +1266,13 @@ public class TimelineScreen extends Screen {
         for (int i = 0; i < help.size(); i++) {
             MTRHelpText.Line line = help.get(i);
             if (line.heading() && i > 0) y += lineHeight;
-            graphics.text(this.font, Component.literal(line.text()),
+            graphics.drawString(this.font, Component.literal(line.text()),
                     boxX + padding + (line.heading() ? 0 : 8), y,
                     line.heading() ? MTRWidgets.TEXT_ACCENT : MTRWidgets.TEXT);
             y += lineHeight;
         }
         y += lineHeight;
-        graphics.text(this.font, hint, boxX + padding, y, MTRWidgets.TEXT_DIM);
+        graphics.drawString(this.font, hint, boxX + padding, y, MTRWidgets.TEXT_DIM);
     }
 
     // Grab-scrolling---

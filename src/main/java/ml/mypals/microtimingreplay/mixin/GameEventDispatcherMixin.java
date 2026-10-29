@@ -19,12 +19,13 @@ import org.spongepowered.asm.mixin.injection.At;
 @Mixin(GameEventDispatcher.class)
 public class GameEventDispatcherMixin {
 
-    @WrapOperation(method = "lambda$post$0", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/gameevent/GameEventListener;handleGameEvent(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/Holder;Lnet/minecraft/world/level/gameevent/GameEvent$Context;Lnet/minecraft/world/phys/Vec3;)Z"))
+    // Loom retains intermediary names for Mojang's synthetic lambda methods.
+    @WrapOperation(method = "method_45492(Ljava/util/List;Lnet/minecraft/core/Holder;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/level/gameevent/GameEvent$Context;Lnet/minecraft/world/level/gameevent/GameEventListener;Lnet/minecraft/world/phys/Vec3;)V", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/gameevent/GameEventListener;handleGameEvent(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/Holder;Lnet/minecraft/world/level/gameevent/GameEvent$Context;Lnet/minecraft/world/phys/Vec3;)Z"))
     private boolean mtr$onListen1(GameEventListener instance, ServerLevel serverLevel, Holder<GameEvent> gameEventHolder, GameEvent.Context context, Vec3 vec3, Operation<Boolean> original) {
         boolean bl = original.call(instance, serverLevel, gameEventHolder, context, vec3);
         if (bl && MTRState.isRecording(serverLevel)) {
             MTRProfile profile = MTRState.getActiveProfile();
-            String dim = serverLevel.dimension().identifier().toString();
+            String dim = serverLevel.dimension().location().toString();
             if (profile != null && !profile.outsideAreaVec3(vec3, dim)) {
                 MTRState.recordStep(
                         new PostGameEventEvent(
@@ -45,7 +46,7 @@ public class GameEventDispatcherMixin {
         boolean bl = original.call(instance, serverLevel, gameEventHolder, context, vec3);
         if (bl && MTRState.isRecording(serverLevel)) {
             MTRProfile profile = MTRState.getActiveProfile();
-            String dim = serverLevel.dimension().identifier().toString();
+            String dim = serverLevel.dimension().location().toString();
             if (profile != null && !profile.outsideAreaVec3(vec3, dim)) {
                 MTRState.recordStep(
                         new PostGameEventEvent(

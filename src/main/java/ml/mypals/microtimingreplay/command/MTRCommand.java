@@ -35,7 +35,6 @@ import net.minecraft.network.chat.Component;
 import java.util.List;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.permissions.Permissions;
 import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.Entity;
 
@@ -79,7 +78,7 @@ public class MTRCommand {
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher, CommandBuildContext registryAccess, Commands.CommandSelection environment) {
         dispatcher.register(Commands.literal("mtr")
-            .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
+            .requires(source -> source.hasPermission(2))
             .then(Commands.literal("profile")
                 .then(Commands.literal("create")
                     .then(Commands.argument("name", StringArgumentType.word())
@@ -304,7 +303,7 @@ public class MTRCommand {
             ServerLevel level = context.getSource().getLevel();
             for (Entity entity : level.getAllEntities()) {
                 if (entity instanceof Display) {
-                    if (entity.entityTags().contains("mtr_area_marker")) {
+                    if (entity.getTags().contains("mtr_area_marker")) {
                         entity.discard();
                     }
                 }
@@ -315,7 +314,7 @@ public class MTRCommand {
                 context.getSource().sendSuccess(() -> MTRComponent.translatable("commands.mtr.profile.hid_markers", "Hid area markers for profile: %s", name), false);
             } else {
                 currentInfoProfile = name;
-                String currentDim = level.dimension().identifier().toString();
+                String currentDim = level.dimension().location().toString();
                 for (MTRProfile.Area area : profile.getAreas()) {
                     if (area.dimension.equals(currentDim)) {
                         MTRMarker.spawnAreaMarker(level, area);
@@ -334,12 +333,12 @@ public class MTRCommand {
     public static void refreshAreaMarkers(ServerLevel level, MTRProfile profile) {
         for (Entity entity : level.getAllEntities()) {
             if (entity instanceof Display) {
-                if (entity.entityTags().contains("mtr_area_marker")) {
+                if (entity.getTags().contains("mtr_area_marker")) {
                     entity.discard();
                 }
             }
         }
-        String currentDim = level.dimension().identifier().toString();
+        String currentDim = level.dimension().location().toString();
         for (MTRProfile.Area area : profile.getAreas()) {
             if (area.dimension.equals(currentDim)) {
                 MTRMarker.spawnAreaMarker(level, area);
@@ -358,7 +357,7 @@ public class MTRCommand {
         BlockPos pos1 = BlockPosArgument.getLoadedBlockPos(context, "pos1");
         BlockPos pos2 = BlockPosArgument.getLoadedBlockPos(context, "pos2");
 
-        String assignedName = profile.addArea(areaName, pos1, pos2, context.getSource().getLevel().dimension().identifier().toString());
+        String assignedName = profile.addArea(areaName, pos1, pos2, context.getSource().getLevel().dimension().location().toString());
         if (assignedName != null) {
             ProfileManager.saveProfile(profile);
             context.getSource().sendSuccess(() -> MTRComponent.translatable("commands.mtr.area.added", "Area added to profile '%s' with ID/Name: %s", name, assignedName), true);

@@ -25,7 +25,8 @@ public abstract class ServerPhasesMixin {
 
     @Shadow
     public abstract ServerLevel overworld();
-    @WrapOperation(method = "processPacketsAndTick", at = @At(value = "INVOKE",
+    // In 1.21.10 the main loop and the wait phase both drain queued packets directly.
+    @WrapOperation(method = {"runServer", "waitUntilNextTick"}, at = @At(value = "INVOKE",
             target = "Lnet/minecraft/network/PacketProcessor;processQueuedPackets()V"))
     private void mtr$onProcessQueuedPackets(PacketProcessor instance, Operation<Void> original) {
         if (MTRState.isRecording(null) && PhaseType.PACKET_PROCESS.enabled()) {
@@ -50,7 +51,7 @@ public abstract class ServerPhasesMixin {
                 original.call(level, hasTimeLeft);
                 return;
             }
-            String dim = level.dimension().identifier().toString();
+            String dim = level.dimension().location().toString();
             MTRState.pushEvent(new LevelTickEvent(
                     this.tickCount - MTRState.getRecordStartTick(),
                     PhaseType.LEVEL_TICK,

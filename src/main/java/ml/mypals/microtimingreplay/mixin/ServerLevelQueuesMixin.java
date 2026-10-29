@@ -50,13 +50,13 @@ public abstract class ServerLevelQueuesMixin {
     @Inject(method = "addEntity", at = @At("HEAD"))
     private void mtr$onEntityAddedToWorld(Entity entity, CallbackInfoReturnable<Boolean> cir) {
         if (entity.level().isClientSide()) return;
-        if (entity.entityTags().contains(EntityReplayManager.REPLAY_ENTITY_TAG)) return;
+        if (entity.getTags().contains(EntityReplayManager.REPLAY_ENTITY_TAG)) return;
 
         if (MTRState.isRecording(entity.level())) {
             if (!RecordingFilterConfig.isEnabled("entity_spawn")) return;
             MTRProfile activeProfile = MTRState.getActiveProfile();
             if (activeProfile != null) {
-                String dim = entity.level().dimension().identifier().toString();
+                String dim = entity.level().dimension().location().toString();
                 if (!activeProfile.outsideAreaVec3(entity.position(), dim)) {
                     long currentTick = this.getServer().getTickCount() - MTRState.getRecordStartTick();
 
@@ -83,7 +83,7 @@ public abstract class ServerLevelQueuesMixin {
         if (MTRState.isRecording(level)) {
             if (!RecordingFilterConfig.isEnabled("execute_block_event")) return;
             MTRProfile profile = MTRState.getActiveProfile();
-            String dim = level.dimension().identifier().toString();
+            String dim = level.dimension().location().toString();
             if (profile != null && !profile.outsideArea(eventData.pos(), dim)) {
                 MTRState.pushEvent(new QueueEvent(
                     this.getServer().getTickCount() - MTRState.getRecordStartTick(),
@@ -100,7 +100,7 @@ public abstract class ServerLevelQueuesMixin {
         ServerLevel level = (ServerLevel) (Object) this;
         if (MTRState.isRecording(level)) {
             MTRProfile profile = MTRState.getActiveProfile();
-            String dim = level.dimension().identifier().toString();
+            String dim = level.dimension().location().toString();
             if (profile != null && !profile.outsideArea(eventData.pos(), dim)) {
                 MTRState.popEvent();
             }
@@ -113,7 +113,7 @@ public abstract class ServerLevelQueuesMixin {
         if (MTRState.isRecording(level)) {
             if (!RecordingFilterConfig.isEnabled("block_tick")) return;
             MTRProfile profile = MTRState.getActiveProfile();
-            String dim = level.dimension().identifier().toString();
+            String dim = level.dimension().location().toString();
             if (profile != null && !profile.outsideArea(pos, dim)) {
                 MTRState.pushEvent(new QueueEvent(
                         this.getServer().getTickCount() - MTRState.getRecordStartTick(),
@@ -130,7 +130,7 @@ public abstract class ServerLevelQueuesMixin {
         ServerLevel level = (ServerLevel) (Object) this;
         if (MTRState.isRecording(level)) {
             MTRProfile profile = MTRState.getActiveProfile();
-            String dim = level.dimension().identifier().toString();
+            String dim = level.dimension().location().toString();
             if (profile != null && !profile.outsideArea(pos, dim)) {
                 MTRState.popEvent();
             }
@@ -143,7 +143,7 @@ public abstract class ServerLevelQueuesMixin {
         if (MTRState.isRecording(level)) {
             if (!RecordingFilterConfig.isEnabled("fluid_tick")) return;
             MTRProfile profile = MTRState.getActiveProfile();
-            String dim = level.dimension().identifier().toString();
+            String dim = level.dimension().location().toString();
             if (profile != null && !profile.outsideArea(pos, dim)) {
                 MTRState.pushEvent(new QueueEvent(
                         this.getServer().getTickCount() - MTRState.getRecordStartTick(),
@@ -160,7 +160,7 @@ public abstract class ServerLevelQueuesMixin {
         ServerLevel level = (ServerLevel) (Object) this;
         if (MTRState.isRecording(level)) {
             MTRProfile profile = MTRState.getActiveProfile();
-            String dim = level.dimension().identifier().toString();
+            String dim = level.dimension().location().toString();
             if (profile != null && !profile.outsideArea(pos, dim)) {
                 MTRState.popEvent();
             }
@@ -173,7 +173,7 @@ public abstract class ServerLevelQueuesMixin {
         if (MTRState.isRecording(level)) {
             if (!RecordingFilterConfig.isEnabled("post_game_event")) return;
             MTRProfile profile = MTRState.getActiveProfile();
-            String dim = level.dimension().identifier().toString();
+            String dim = level.dimension().location().toString();
             if (profile != null && !profile.outsideAreaVec3(position, dim)) {
                 MTRState.pushEvent(new PostGameEventEvent(
                         this.getServer().getTickCount() - MTRState.getRecordStartTick(),
@@ -191,7 +191,7 @@ public abstract class ServerLevelQueuesMixin {
         ServerLevel level = (ServerLevel) (Object) this;
         if (MTRState.isRecording(level)) {
             MTRProfile profile = MTRState.getActiveProfile();
-            String dim = level.dimension().identifier().toString();
+            String dim = level.dimension().location().toString();
             if (profile != null && !profile.outsideAreaVec3(position, dim)) {
                 MTRState.popEvent();
             }
@@ -205,7 +205,7 @@ public abstract class ServerLevelQueuesMixin {
             if (!RecordingFilterConfig.isEnabled("add_block_event")) return;
             MTRProfile activeProfile = MTRState.getActiveProfile();
             if (activeProfile != null) {
-                String dim = level.dimension().identifier().toString();
+                String dim = level.dimension().location().toString();
                 if (activeProfile.outsideArea(pos, dim)) return;
                 long currentTick = this.getServer().getTickCount() - MTRState.getRecordStartTick();
                 int blockStateId = Block.getId(block.defaultBlockState());

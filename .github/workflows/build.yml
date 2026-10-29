@@ -17,7 +17,7 @@ jobs:
       - name: setup jdk
         uses: actions/setup-java@v5
         with:
-          java-version: '25'
+          java-version: '21'
           distribution: 'microsoft'
       - name: make gradle wrapper executable
         run: chmod +x ./gradlew
@@ -28,3 +28,9 @@ jobs:
         with:
           name: Artifacts
           path: build/libs/
+      - name: capture test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: Test reports
+          path: build/reports/tests/

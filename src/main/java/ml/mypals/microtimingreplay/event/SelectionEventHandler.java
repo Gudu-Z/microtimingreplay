@@ -79,7 +79,7 @@ public class SelectionEventHandler {
         });
 
         UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
-            if (world.isClientSide()) return InteractionResult.PASS;
+            if (world.isClientSide() || !(player instanceof ServerPlayer serverPlayer)) return InteractionResult.PASS;
             if (player.getItemInHand(hand).getItem() != Items.PURPLE_DYE) return InteractionResult.PASS;
 
             String infoProfile = MTRCommand.getCurrentInfoProfile();
@@ -92,10 +92,10 @@ public class SelectionEventHandler {
                 BlockPos p1 = pos1Map.get(player.getUUID());
                 BlockPos p2 = pos2Map.get(player.getUUID());
                 if (p1 != null && p2 != null) {
-                    String assignedName = profile.addArea(null, p1, p2, world.dimension().identifier().toString());
+                    String assignedName = profile.addArea(null, p1, p2, world.dimension().location().toString());
                     if (assignedName != null) {
                         ProfileManager.saveProfile(profile);
-                        player.sendSystemMessage(Component.literal("Area confirmed and saved as: " + assignedName));
+                        serverPlayer.sendSystemMessage(Component.literal("Area confirmed and saved as: " + assignedName));
                         pos1Map.remove(player.getUUID());
                         pos2Map.remove(player.getUUID());
                         
@@ -110,23 +110,23 @@ public class SelectionEventHandler {
                             MTRCommand.refreshAreaMarkers((ServerLevel) world, profile);
                         }
                     } else {
-                        player.sendSystemMessage(Component.literal("Failed to add area."));
+                        serverPlayer.sendSystemMessage(Component.literal("Failed to add area."));
                     }
                 } else {
-                    player.sendSystemMessage(Component.literal("Incomplete selection. Need 2 points."));
+                    serverPlayer.sendSystemMessage(Component.literal("Incomplete selection. Need 2 points."));
                 }
                 return InteractionResult.SUCCESS;
             } else {
                 BlockPos pos = hitResult.getBlockPos();
                 pos2Map.put(player.getUUID(), pos);
-                player.sendSystemMessage(Component.literal("Pos 2 set to: " + pos.toShortString()));
+                serverPlayer.sendSystemMessage(Component.literal("Pos 2 set to: " + pos.toShortString()));
                 player.swing(hand);
                 return InteractionResult.SUCCESS;
             }
         });
 
         AttackBlockCallback.EVENT.register((player, world, hand, pos, direction) -> {
-            if (world.isClientSide()) return InteractionResult.PASS;
+            if (world.isClientSide() || !(player instanceof ServerPlayer serverPlayer)) return InteractionResult.PASS;
             if (player.getMainHandItem().getItem() != Items.PURPLE_DYE) return InteractionResult.PASS;
 
             String infoProfile = MTRCommand.getCurrentInfoProfile();
@@ -143,12 +143,12 @@ public class SelectionEventHandler {
                     MTRMarker.removeEntity((ServerLevel) world, markerId);
                 }
                 
-                player.sendSystemMessage(Component.literal("Selection cleared."));
+                serverPlayer.sendSystemMessage(Component.literal("Selection cleared."));
                 player.swing(hand);
                 return InteractionResult.SUCCESS;
             } else {
                 pos1Map.put(player.getUUID(), pos);
-                player.sendSystemMessage(Component.literal("Pos 1 set to: " + pos.toShortString()));
+                serverPlayer.sendSystemMessage(Component.literal("Pos 1 set to: " + pos.toShortString()));
                 player.swing(hand);
                 return InteractionResult.SUCCESS;
             }

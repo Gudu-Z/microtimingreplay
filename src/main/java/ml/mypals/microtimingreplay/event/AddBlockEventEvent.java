@@ -13,7 +13,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -97,7 +97,7 @@ public class AddBlockEventEvent extends BlockPosEvent {
     public static AddBlockEventEvent readNBT(CompoundTag tag) {
         int stateId;
         if (tag.contains("blockName")) {
-            Block block = BuiltInRegistries.BLOCK.getOptional(Identifier.tryParse(tag.getString("blockName").orElse("minecraft:air"))).orElse(Blocks.AIR);
+            Block block = BuiltInRegistries.BLOCK.getOptional(ResourceLocation.tryParse(tag.getString("blockName").orElse("minecraft:air"))).orElse(Blocks.AIR);
             stateId = Block.getId(block.defaultBlockState());
         } else {
             stateId = tag.getInt("blockStateId").orElse(0);

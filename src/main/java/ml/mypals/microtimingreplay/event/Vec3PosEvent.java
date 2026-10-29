@@ -15,7 +15,7 @@ import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
-import org.jspecify.annotations.Nullable;
+import org.jetbrains.annotations.Nullable;
 
 
 public class Vec3PosEvent extends MTREvent {
@@ -44,7 +44,7 @@ public class Vec3PosEvent extends MTREvent {
         ServerLevel targetLevel = level;
         if (dimension != null && !dimension.isEmpty() && level.getServer() != null) {
             for (ServerLevel sl : level.getServer().getAllLevels()) {
-                if (sl.dimension().identifier().toString().equals(dimension)) {
+                if (sl.dimension().location().toString().equals(dimension)) {
                     targetLevel = sl;
                     break;
                 }

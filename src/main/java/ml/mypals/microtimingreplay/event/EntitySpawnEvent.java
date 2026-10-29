@@ -90,7 +90,7 @@ public class EntitySpawnEvent extends Vec3PosEvent {
     @Override
     public void applySelf(ServerLevel level, boolean forward) {
         if (entityUuid == null || entityUuid.isEmpty()
-                || !level.dimension().identifier().toString().equals(getDimension())) return;
+                || !level.dimension().location().toString().equals(getDimension())) return;
         UUID uuid;
         try {
             uuid = UUID.fromString(entityUuid);

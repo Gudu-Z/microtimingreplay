@@ -12,7 +12,7 @@ import net.minecraft.server.dialog.*;
 import net.minecraft.server.dialog.action.StaticAction;
 import net.minecraft.server.dialog.body.PlainMessage;
 import net.minecraft.server.level.ServerPlayer;
-import org.jspecify.annotations.NonNull;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -206,7 +206,7 @@ public class TimelineScreenGenerator {
                 navButtons)));
     }
 
-    private static @NonNull MultiActionDialog getMultiActionDialog(
+    private static @NotNull MultiActionDialog getMultiActionDialog(
             List<PlainMessage> bodyLines, Component title, List<ActionButton> navButtons) {
 
         List<DialogBody> dialogBodies = new ArrayList<>(bodyLines);

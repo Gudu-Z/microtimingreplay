@@ -147,8 +147,8 @@ public class EntityReplayManager {
 
             List<Entity> levelEntities = new ArrayList<>();
             for (Entity entity : level.getAllEntities()) {
-                if (entity.entityTags().contains(REPLAY_ENTITY_TAG)
-                        || entity.entityTags().contains("mtr_replay_marker")) {
+                if (entity.getTags().contains(REPLAY_ENTITY_TAG)
+                        || entity.getTags().contains("mtr_replay_marker")) {
                     levelEntities.add(entity);
                 }
             }

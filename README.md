@@ -1,5 +1,21 @@
 # MicroTimingReplay (MTIR) (Patrly Outdated)
 
+## Minecraft 1.21.10 port
+
+This fork targets **Minecraft Java Edition 1.21.10**, **Java 21 or newer**,
+**Fabric Loader 0.19.3 or newer**, and **Fabric API 0.138.4+1.21.10**.
+Install the built mod JAR and the matching Fabric API in the instance's `mods` folder.
+The client component is optional on a dedicated server; installing it on the client
+adds the timeline panel, shortcuts, and camera controls.
+
+Build with a JDK 21 or newer using `./gradlew build` (Windows: `gradlew.bat build`).
+The installable JAR is `build/libs/microtimingreplay-1.0.0+mc1.21.10.jar`;
+the `-sources.jar` is for development only. The build runs Fabric-backed tests on
+both server and client environments, including Mixin target loading and recording/network serialization.
+
+Use recordings created on 1.21.10. Recordings contain version-specific numeric block
+state IDs and are not portable from the upstream 26.1.2 version.
+
 A Fabric mod for **recording** micro-timing events on the server over a period of time (block updates, shape updates, scheduled ticks, block events, piston movements, entity movement/spawning, etc.) and later **step-by-step replaying** them — you can go forward, backward, jump to any step, and inspect the Java call stack at the moment each event was produced.
 
 ---

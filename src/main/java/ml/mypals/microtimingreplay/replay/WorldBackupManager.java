@@ -44,7 +44,7 @@ public class WorldBackupManager {
         for (MTRProfile.Area area : profile.getAreas()) {
             ServerLevel level = null;
             for (ServerLevel sl : MicroTimingReplay.server.getAllLevels()) {
-                if (sl.dimension().identifier().toString().equals(area.dimension)) {
+                if (sl.dimension().location().toString().equals(area.dimension)) {
                     level = sl;
                     break;
                 }
@@ -92,7 +92,7 @@ public class WorldBackupManager {
             ListTag entitiesTag = new ListTag();
             for (Entity entity : level.getAllEntities()) {
                 if (entity instanceof Player && !includePlayerStandIns) continue;
-                if (entity.entityTags().contains(EntityReplayManager.REPLAY_ENTITY_TAG)) continue;
+                if (entity.getTags().contains(EntityReplayManager.REPLAY_ENTITY_TAG)) continue;
 
                 double ex = entity.getX();
                 double ey = entity.getY();
@@ -135,7 +135,7 @@ public class WorldBackupManager {
                 
                 ServerLevel level = null;
                 for (ServerLevel sl : MicroTimingReplay.server.getAllLevels()) {
-                    if (sl.dimension().identifier().toString().equals(dimension)) {
+                    if (sl.dimension().location().toString().equals(dimension)) {
                         level = sl;
                         break;
                     }
@@ -165,7 +165,7 @@ public class WorldBackupManager {
                     List<Entity> toRemove = new ArrayList<>();
                     for (Entity entity : level.getAllEntities()) {
                         if (entity instanceof Player) continue;
-                        if (entity.entityTags().contains(EntityReplayManager.REPLAY_ENTITY_TAG)) continue;
+                        if (entity.getTags().contains(EntityReplayManager.REPLAY_ENTITY_TAG)) continue;
 
                         double ex = entity.getX();
                         double ey = entity.getY();

@@ -14,7 +14,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.permissions.Permissions;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -24,7 +23,7 @@ import java.util.Optional;
  * Server half of the client add-on protocol: payload registration, the receive
  * handlers, and the push helpers the replay engine calls when state moves.
  *
- * <p>Every handler that changes something re-checks {@link Permissions#COMMANDS_ADMIN}.
+ * <p>Every handler that changes something re-checks operator permission level 2.
  * The command tree gates on it too, but packets do not go through the command tree —
  * without this any client could drive somebody else's replay.
  */
@@ -42,25 +41,25 @@ public class MTRNetworking {
      * ends must agree on the type table before any handler is registered.
      */
     public static void registerTypes() {
-        PayloadTypeRegistry.serverboundPlay().register(MTRPayloads.HelloC2S.TYPE, MTRPayloads.HelloC2S.CODEC);
-        PayloadTypeRegistry.serverboundPlay().register(MTRPayloads.SubscribeC2S.TYPE, MTRPayloads.SubscribeC2S.CODEC);
-        PayloadTypeRegistry.serverboundPlay().register(MTRPayloads.RequestTimelineC2S.TYPE, MTRPayloads.RequestTimelineC2S.CODEC);
-        PayloadTypeRegistry.serverboundPlay().register(MTRPayloads.RequestDetailsC2S.TYPE, MTRPayloads.RequestDetailsC2S.CODEC);
-        PayloadTypeRegistry.serverboundPlay().register(MTRPayloads.StepC2S.TYPE, MTRPayloads.StepC2S.CODEC);
-        PayloadTypeRegistry.serverboundPlay().register(MTRPayloads.JumpC2S.TYPE, MTRPayloads.JumpC2S.CODEC);
-        PayloadTypeRegistry.serverboundPlay().register(MTRPayloads.SetCameraFollowC2S.TYPE, MTRPayloads.SetCameraFollowC2S.CODEC);
-        PayloadTypeRegistry.serverboundPlay().register(MTRPayloads.RequestFilterC2S.TYPE, MTRPayloads.RequestFilterC2S.CODEC);
-        PayloadTypeRegistry.serverboundPlay().register(MTRPayloads.SetFilterC2S.TYPE, MTRPayloads.SetFilterC2S.CODEC);
-        PayloadTypeRegistry.serverboundPlay().register(MTRPayloads.ResetFilterC2S.TYPE, MTRPayloads.ResetFilterC2S.CODEC);
+        PayloadTypeRegistry.playC2S().register(MTRPayloads.HelloC2S.TYPE, MTRPayloads.HelloC2S.CODEC);
+        PayloadTypeRegistry.playC2S().register(MTRPayloads.SubscribeC2S.TYPE, MTRPayloads.SubscribeC2S.CODEC);
+        PayloadTypeRegistry.playC2S().register(MTRPayloads.RequestTimelineC2S.TYPE, MTRPayloads.RequestTimelineC2S.CODEC);
+        PayloadTypeRegistry.playC2S().register(MTRPayloads.RequestDetailsC2S.TYPE, MTRPayloads.RequestDetailsC2S.CODEC);
+        PayloadTypeRegistry.playC2S().register(MTRPayloads.StepC2S.TYPE, MTRPayloads.StepC2S.CODEC);
+        PayloadTypeRegistry.playC2S().register(MTRPayloads.JumpC2S.TYPE, MTRPayloads.JumpC2S.CODEC);
+        PayloadTypeRegistry.playC2S().register(MTRPayloads.SetCameraFollowC2S.TYPE, MTRPayloads.SetCameraFollowC2S.CODEC);
+        PayloadTypeRegistry.playC2S().register(MTRPayloads.RequestFilterC2S.TYPE, MTRPayloads.RequestFilterC2S.CODEC);
+        PayloadTypeRegistry.playC2S().register(MTRPayloads.SetFilterC2S.TYPE, MTRPayloads.SetFilterC2S.CODEC);
+        PayloadTypeRegistry.playC2S().register(MTRPayloads.ResetFilterC2S.TYPE, MTRPayloads.ResetFilterC2S.CODEC);
 
-        PayloadTypeRegistry.clientboundPlay().register(MTRPayloads.HelloS2C.TYPE, MTRPayloads.HelloS2C.CODEC);
-        PayloadTypeRegistry.clientboundPlay().register(MTRPayloads.SessionsS2C.TYPE, MTRPayloads.SessionsS2C.CODEC);
-        PayloadTypeRegistry.clientboundPlay().register(MTRPayloads.CursorS2C.TYPE, MTRPayloads.CursorS2C.CODEC);
-        PayloadTypeRegistry.clientboundPlay().register(MTRPayloads.FilterS2C.TYPE, MTRPayloads.FilterS2C.CODEC);
-        PayloadTypeRegistry.clientboundPlay().register(MTRPayloads.OpenScreenS2C.TYPE, MTRPayloads.OpenScreenS2C.CODEC);
+        PayloadTypeRegistry.playS2C().register(MTRPayloads.HelloS2C.TYPE, MTRPayloads.HelloS2C.CODEC);
+        PayloadTypeRegistry.playS2C().register(MTRPayloads.SessionsS2C.TYPE, MTRPayloads.SessionsS2C.CODEC);
+        PayloadTypeRegistry.playS2C().register(MTRPayloads.CursorS2C.TYPE, MTRPayloads.CursorS2C.CODEC);
+        PayloadTypeRegistry.playS2C().register(MTRPayloads.FilterS2C.TYPE, MTRPayloads.FilterS2C.CODEC);
+        PayloadTypeRegistry.playS2C().register(MTRPayloads.OpenScreenS2C.TYPE, MTRPayloads.OpenScreenS2C.CODEC);
         // Both blow past the 1 MiB vanilla payload cap; Fabric splits these for us.
-        PayloadTypeRegistry.clientboundPlay().registerLarge(MTRPayloads.TimelineS2C.TYPE, MTRPayloads.TimelineS2C.CODEC, MAX_TIMELINE_BYTES);
-        PayloadTypeRegistry.clientboundPlay().registerLarge(MTRPayloads.DetailsS2C.TYPE, MTRPayloads.DetailsS2C.CODEC, MAX_DETAILS_BYTES);
+        PayloadTypeRegistry.playS2C().registerLarge(MTRPayloads.TimelineS2C.TYPE, MTRPayloads.TimelineS2C.CODEC, MAX_TIMELINE_BYTES);
+        PayloadTypeRegistry.playS2C().registerLarge(MTRPayloads.DetailsS2C.TYPE, MTRPayloads.DetailsS2C.CODEC, MAX_DETAILS_BYTES);
     }
 
     public static void registerServerHandlers() {
@@ -160,7 +159,7 @@ public class MTRNetworking {
     }
 
     public static boolean isAllowed(ServerPlayer player) {
-        return player != null && player.permissions().hasPermission(Permissions.COMMANDS_ADMIN);
+        return player != null && player.hasPermissions(2);
     }
 
     // ── pushes ───────────────────────────────────────────────────────────────

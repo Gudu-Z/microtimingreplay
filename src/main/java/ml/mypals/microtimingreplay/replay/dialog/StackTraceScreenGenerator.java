@@ -20,7 +20,7 @@ import net.minecraft.server.dialog.body.DialogBody;
 import net.minecraft.server.dialog.body.PlainMessage;
 import net.minecraft.server.dialog.input.TextInput;
 import net.minecraft.server.level.ServerPlayer;
-import org.jspecify.annotations.NonNull;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -90,7 +90,7 @@ public class StackTraceScreenGenerator {
         player.openDialog(Holder.direct(dialog));
     }
 
-    private static @NonNull Input getInput(List<String> rawLines) {
+    private static @NotNull Input getInput(List<String> rawLines) {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < rawLines.size(); i++) {
             sb.append(rawLines.get(i));
@@ -113,7 +113,7 @@ public class StackTraceScreenGenerator {
         return new Input("stacktrace", textInput);
     }
 
-    public static @NonNull MutableComponent formatStackTraceLine(String rawLine) {
+    public static @NotNull MutableComponent formatStackTraceLine(String rawLine) {
         String raw = rawLine;
         String module = "";
         int lastSlash = raw.lastIndexOf('/');
