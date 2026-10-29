@@ -3,13 +3,13 @@
 ## Minecraft 1.21.10 port
 
 This fork targets **Minecraft Java Edition 1.21.10**, **Java 21 or newer**,
-**Fabric Loader 0.19.3 or newer**, and **Fabric API 0.138.4+1.21.10**.
+**Fabric Loader 0.19.2 or newer**, and **Fabric API 0.138.4+1.21.10**.
 Install the built mod JAR and the matching Fabric API in the instance's `mods` folder.
 The client component is optional on a dedicated server; installing it on the client
 adds the timeline panel, shortcuts, and camera controls.
 
 Build with a JDK 21 or newer using `./gradlew build` (Windows: `gradlew.bat build`).
-The installable JAR is `build/libs/microtimingreplay-1.0.0+mc1.21.10.jar`;
+The installable JAR is `build/libs/microtimingreplay-1.0.1+mc1.21.10.jar`;
 the `-sources.jar` is for development only. The build runs Fabric-backed tests on
 both server and client environments, including Mixin target loading and recording/network serialization.
 
