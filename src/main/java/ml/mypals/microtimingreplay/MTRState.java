@@ -1,5 +1,6 @@
 package ml.mypals.microtimingreplay;
 
+import ml.mypals.microtimingreplay.compat.TickControl;
 import ml.mypals.microtimingreplay.replay.EntityReplayManager;
 
 import ml.mypals.microtimingreplay.event.MTREvent;
@@ -10,7 +11,6 @@ import ml.mypals.microtimingreplay.replay.ReplayManager;
 import ml.mypals.microtimingreplay.replay.WorldBackupManager;
 import ml.mypals.microtimingreplay.replay.stackTrace.StackTraceManager;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.ServerTickRateManager;
 import net.minecraft.world.level.Level;
 
 import java.util.Stack;
@@ -29,6 +29,7 @@ public class MTRState {
     private static MTRProfile activeProfile = null;
     private static long recordStartTick = 0;
     private static long recordTargetTick = -1;
+    private static boolean recordSubTickStep;
     public static final Stack<MTREvent> currentEventStack = new Stack<>();
 
     public static State getCurrentState() {
@@ -65,6 +66,8 @@ public class MTRState {
         if (profile == null)
             return false;
 
+        boolean wasFrozen = TickControl.isFrozen(server);
+        recordSubTickStep = !server.tickRateManager().isFrozen() && TickControl.isSubTickFrozen(server);
         currentState = State.RECORDING;
         activeProfile = profile;
         recordStartTick = server.getTickCount() - profile.getTicksRecorded();
@@ -80,14 +83,25 @@ public class MTRState {
 
         RecordingBossBar.start(server, profile.getName(), advance);
 
-        ServerTickRateManager manager = server.tickRateManager();
-        manager.stepGameIfPaused(advance);
+        boolean stepped = TickControl.stepIfFrozen(server, advance);
+        if (wasFrozen && !stepped) {
+            // A pending SubTick queue step can reject a full-tick step. Do not
+            // leave a recording running against a world that cannot advance.
+            RecordingBossBar.stop();
+            currentState = State.IDLE;
+            activeProfile = null;
+            recordStartTick = 0;
+            recordTargetTick = -1;
+            recordSubTickStep = false;
+            currentEventStack.clear();
+            return false;
+        }
 
         return true;
     }
 
     public static boolean isTimeFrozen(MinecraftServer server) {
-        return server != null && server.tickRateManager().isFrozen();
+        return TickControl.isFrozen(server);
     }
 
     public static void stopRecording() {
@@ -100,6 +114,7 @@ public class MTRState {
             currentState = State.IDLE;
             activeProfile = null;
             recordTargetTick = -1;
+            recordSubTickStep = false;
             currentEventStack.clear();
         }
     }
@@ -115,7 +130,10 @@ public class MTRState {
             }
             if (recordTargetTick != -1) {
                 RecordingBossBar.tick(server, recordTargetTick - server.getTickCount());
-                if (server.getTickCount() >= recordTargetTick) {
+                // SubTick can finish at a phase partway through the next loop.
+                // Keep that final segment, while still allowing manual unfreeze.
+                if (server.getTickCount() >= recordTargetTick
+                        && (!recordSubTickStep || !TickControl.isSubTickStepping(server))) {
                     stopRecording();
                 }
             }

@@ -18,6 +18,20 @@ repositories {
 	// for more information about repositories.
 }
 
+// Optional real-mod compatibility runtime, never included in the published jar.
+def subtickCompatMods = providers.gradleProperty('subtickCompatMods')
+def subtickCompatJars = files()
+if (subtickCompatMods.isPresent()) {
+	subtickCompatJars.from(fileTree(dir: subtickCompatMods.get(), includes: [
+		'subtick-*.jar', '*fabric-carpet-*.jar', '*malilib-*.jar'
+	]))
+	// Let Loader remap the original distribution jars in the test runtime. This
+	// also supports mods built with a newer Loom without changing their metadata.
+	tasks.named('generateRemapClasspath').configure {
+		remapClasspath.from(subtickCompatJars)
+	}
+}
+
 dependencies {
 	// To change the versions see the gradle.properties file
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
@@ -27,10 +41,28 @@ dependencies {
 	// Fabric API. This is technically optional, but you probably want it anyway.
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 	testImplementation "net.fabricmc:fabric-loader-junit:${project.loader_version}"
+	testImplementation 'org.mockito:mockito-core:5.20.0'
+
 }
 
 tasks.withType(Test).configureEach {
 	useJUnitPlatform()
+	systemProperty 'mtr.test.subtick', subtickCompatMods.isPresent()
+	if (subtickCompatMods.isPresent()) {
+		// Runtime remapping reads Minecraft plus the optional mod class hierarchy.
+		maxHeapSize = '2G'
+		def remapClasspathTask = tasks.named('generateRemapClasspath')
+		dependsOn remapClasspathTask
+		inputs.files(subtickCompatJars).withPropertyName('subtickCompatJars')
+		inputs.file(remapClasspathTask.flatMap { it.remapClasspathFile })
+				.withPropertyName('subtickRemapClasspath')
+		doFirst {
+			systemProperty 'fabric.addMods', subtickCompatJars.files
+					.collect { it.absolutePath }.sort().join(File.pathSeparator)
+			systemProperty 'fabric.remapClasspathFile',
+					remapClasspathTask.get().remapClasspathFile.get().asFile.absolutePath
+		}
+	}
 	workingDir = layout.buildDirectory.dir("test-runs/${name}").get().asFile
 	doFirst {
 		workingDir.mkdirs()

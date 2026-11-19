@@ -173,7 +173,7 @@
     "commands.mtr.area.removed_from_profile": "已从 配置'%2$s' 中移除选区 '%1$s'",
     "commands.mtr.area.not_found": "未找到选区：%s",
     "commands.mtr.area.modified_coords": "选区 '%s' 坐标已更新。",
-    "commands.mtr.record.start_failed": "开始录制失败（已经在录制中或找不到配置）",
+    "commands.mtr.record.start_failed": "开始录制失败（已有任务在运行、找不到配置，或当前冻结状态无法步进）",
     "commands.mtr.record.started_ticks": "已开始录制，时长 %d 刻",
     "commands.mtr.record.not_frozen_hint": "时间未冻结。录制已经开始并会按时停止；建议先执行 /tick freeze 以获得可控的录制。",
     "commands.mtr.record.cannot_clear_active": "无法清空正在使用中（录制或回放中）的配置数据",

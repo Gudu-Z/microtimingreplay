@@ -435,14 +435,16 @@ public class MTRCommand {
     private static int startRecord(CommandContext<CommandSourceStack> context) {
         String name = StringArgumentType.getString(context, "name");
         int advance = IntegerArgumentType.getInteger(context, "ticks");
+        // SubTick changes FROZEN to STEPPING as soon as recording starts.
+        boolean wasTimeFrozen = MTRState.isTimeFrozen(context.getSource().getServer());
         
         if (!MTRState.startRecording(name, context.getSource().getServer(), advance)) {
-            context.getSource().sendFailure(MTRComponent.translatable("commands.mtr.record.start_failed", "Failed to start recording (Already running or profile not found)"));
+            context.getSource().sendFailure(MTRComponent.translatable("commands.mtr.record.start_failed", "Failed to start recording (already running, profile not found, or frozen time cannot be stepped)"));
             return 0;
         }
 
         context.getSource().sendSuccess(() -> MTRComponent.translatable("commands.mtr.record.started_ticks", "Started recording for %d ticks", advance), true);
-        if (!MTRState.isTimeFrozen(context.getSource().getServer())) {
+        if (!wasTimeFrozen) {
             context.getSource().sendSystemMessage(MTRComponent.translatable(
                     "commands.mtr.record.not_frozen_hint",
                     "Time is not frozen, so the world was not stepped. Recording is running and will stop on schedule; run /tick freeze first for a controlled capture."));

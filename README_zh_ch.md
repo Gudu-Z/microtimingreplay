@@ -8,9 +8,13 @@
 独立服务器的玩家可以不安装客户端模组；安装后可使用客户端时间线面板、快捷键和镜头控制。
 
 使用 JDK 21 或更高版本运行 `./gradlew build`（Windows 使用 `gradlew.bat build`）。
-可安装的成品为 `build/libs/microtimingreplay-1.0.1+mc1.21.10.jar`，
+可安装的成品为 `build/libs/microtimingreplay-1.0.2+mc1.21.10.jar`，
 `-sources.jar` 仅供开发使用。构建会在 Fabric 服务端和客户端测试环境中检查
 Mixin 目标类加载、录制数据持久化和网络消息读写。
+
+支持可选的 SubTick 2.3：冻结时录制会使用 SubTick 的步进接口，保留当前冻结维度和阶段，
+并等待最后一段阶段执行完毕后停止。开发时可指定含 SubTick、Carpet 和 MaLiLib JAR 的目录运行兼容测试：
+`./gradlew test clientTest -PsubtickCompatMods=/path/to/mods`。
 
 请在 1.21.10 中重新录制。录像含有版本相关的方块状态数字 ID，不能直接复用上游 26.1.2 的录像。
 

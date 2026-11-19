@@ -9,9 +9,14 @@ The client component is optional on a dedicated server; installing it on the cli
 adds the timeline panel, shortcuts, and camera controls.
 
 Build with a JDK 21 or newer using `./gradlew build` (Windows: `gradlew.bat build`).
-The installable JAR is `build/libs/microtimingreplay-1.0.1+mc1.21.10.jar`;
+The installable JAR is `build/libs/microtimingreplay-1.0.2+mc1.21.10.jar`;
 the `-sources.jar` is for development only. The build runs Fabric-backed tests on
 both server and client environments, including Mixin target loading and recording/network serialization.
+
+SubTick 2.3 is optional: frozen recordings use its tick controller and retain the
+current dimension and phase. Recording waits for the final phase of a SubTick step.
+To run the optional compatibility tests with local SubTick, Carpet, and MaLiLib JARs:
+`./gradlew test clientTest -PsubtickCompatMods=/path/to/mods`.
 
 Use recordings created on 1.21.10. Recordings contain version-specific numeric block
 state IDs and are not portable from the upstream 26.1.2 version.

@@ -173,7 +173,7 @@
     "commands.mtr.area.removed_from_profile": "Area '%s' removed from profile '%s'",
     "commands.mtr.area.not_found": "Area not found: %s",
     "commands.mtr.area.modified_coords": "Area '%s' coordinates updated.",
-    "commands.mtr.record.start_failed": "Failed to start recording (Already running or profile not found)",
+    "commands.mtr.record.start_failed": "Failed to start recording (already running, profile not found, or frozen time cannot be stepped)",
     "commands.mtr.record.started_ticks": "Started recording for %d ticks",
     "commands.mtr.record.not_frozen_hint": "Time is not frozen. Recording is running and will stop on schedule; run /tick freeze first for a controlled capture.",
     "commands.mtr.record.cannot_clear_active": "Cannot clear profile while it is active (recording or replaying)",

@@ -1,5 +1,7 @@
 package ml.mypals.microtimingreplay.replay;
 
+import ml.mypals.microtimingreplay.compat.TickControl;
+
 import ml.mypals.microtimingreplay.event.MovingPistonEvent;
 import ml.mypals.microtimingreplay.event.MovingPistonTickEvent;
 
@@ -747,7 +749,7 @@ public class ReplaySession {
         renderCurrentState(level, startCursor);
         notifyStateChanged();
         if (taken > 0)
-            level.getServer().tickRateManager().stepGameIfPaused(2);
+            TickControl.stepIfFrozen(level.getServer(), 2);
         return taken;
     }
 
@@ -795,7 +797,7 @@ public class ReplaySession {
         renderCurrentState(level, startCursor);
         notifyStateChanged();
         if (taken > 0)
-            level.getServer().tickRateManager().stepGameIfPaused(2);
+            TickControl.stepIfFrozen(level.getServer(), 2);
         return taken;
     }
 
@@ -846,7 +848,7 @@ public class ReplaySession {
 
         renderCurrentState(level, startCursor);
         notifyStateChanged();
-        level.getServer().tickRateManager().stepGameIfPaused(2);
+        TickControl.stepIfFrozen(level.getServer(), 2);
         
         return Math.abs(actionCursor - startCursor);
     }
@@ -886,7 +888,7 @@ public class ReplaySession {
         renderCurrentState(level, startCursor);
         notifyStateChanged();
         if (takenActions > 0)
-            level.getServer().tickRateManager().stepGameIfPaused(2);
+            TickControl.stepIfFrozen(level.getServer(), 2);
         return crossed;
     }
 
@@ -931,7 +933,7 @@ public class ReplaySession {
         renderCurrentState(level, startCursor);
         notifyStateChanged();
         if (takenActions > 0)
-            level.getServer().tickRateManager().stepGameIfPaused(2);
+            TickControl.stepIfFrozen(level.getServer(), 2);
         return crossed;
     }
 }
