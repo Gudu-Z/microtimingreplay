@@ -106,6 +106,8 @@ public final class RecordingClock {
         return false;
     }
 
+    public int completedTicks() { return completedTicks; }
+    public int targetTicks() { return targetTicks; }
     public boolean finished() { return completedTicks >= targetTicks; }
     public long currentTick() { return baseTick + completedTicks + (finished() ? 0 : 1); }
     public long completedTick() { return baseTick + completedTicks; }

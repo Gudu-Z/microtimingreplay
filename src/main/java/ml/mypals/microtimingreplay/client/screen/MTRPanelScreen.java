@@ -7,12 +7,10 @@ import ml.mypals.microtimingreplay.client.MTRKeys;
 import ml.mypals.microtimingreplay.util.MTRComponent;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
-import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
 import net.fabricmc.api.EnvType;
@@ -31,8 +29,7 @@ import static ml.mypals.microtimingreplay.client.screen.MTRWidgets.playButtonCli
 @Environment(EnvType.CLIENT)
 public class MTRPanelScreen extends Screen {
 
-    private static final int PANEL_WIDTH = 430;
-    private static final int PANEL_HEIGHT = 64;
+    private static final int MAX_PANEL_WIDTH = 510;
     /** Clearance for the hotbar plus the experience bar underneath the panel. */
     private static final int BOTTOM_MARGIN = 46;
 
@@ -41,6 +38,10 @@ public class MTRPanelScreen extends Screen {
 
     private int panelX;
     private int panelY;
+    private int panelWidth;
+    private int panelHeight;
+    private int firstRow;
+    private int hiddenRows;
 
     private record Card(Component label, int x, int y, int width, boolean active,
                         Runnable onLeft, Runnable onRight) {}
@@ -51,9 +52,6 @@ public class MTRPanelScreen extends Screen {
 
     @Override
     protected void init() {
-        panelX = (this.width - PANEL_WIDTH) / 2;
-        panelY = this.height - BOTTOM_MARGIN - PANEL_HEIGHT;
-
         // Cheap enough to refresh every time the panel comes up, and it means the
         // timeline screen never opens onto stale rows.
         if (ClientReplayState.isWatching()) {
@@ -84,6 +82,11 @@ public class MTRPanelScreen extends Screen {
      */
     private List<Card> buildCards() {
         List<Card> cards = new ArrayList<>();
+
+        if (MTRClientNetworking.canManageRecordings()) {
+            cards.add(new Card(MTRComponent.translatable("mtr.manager.title", "Recordings"), 0, 0, 78, false,
+                    () -> this.minecraft.setScreen(new RecordingManagerScreen()), null));
+        }
 
         if (ClientReplayState.isWatching()) {
             cards.add(new Card(MTRComponent.translatable("mtr.panel.timeline", "Timeline"), 0, 0, 62, false,
@@ -118,22 +121,40 @@ public class MTRPanelScreen extends Screen {
         return position(cards);
     }
 
-    /** Centres the row inside the panel and stamps each card's final x. */
+    /** Wrap cards at the actual GUI width; lists of running replays can span several rows. */
     private List<Card> position(List<Card> cards) {
-        if (cards.isEmpty()) return cards;
-
-        int totalWidth = (cards.size() - 1) * CARD_GAP;
+        panelWidth = Math.min(MAX_PANEL_WIDTH, width - 8);
+        panelX = (width - panelWidth) / 2;
+        List<List<Card>> rows = new ArrayList<>();
+        List<Card> row = new ArrayList<>();
+        int rowWidth = 0;
         for (Card card : cards) {
-            totalWidth += card.width();
+            if (!row.isEmpty() && rowWidth + CARD_GAP + card.width() > panelWidth - 8) {
+                rows.add(row);
+                row = new ArrayList<>();
+                rowWidth = 0;
+            }
+            rowWidth += (row.isEmpty() ? 0 : CARD_GAP) + card.width();
+            row.add(card);
         }
+        if (!row.isEmpty()) rows.add(row);
 
-        int x = panelX + (PANEL_WIDTH - totalWidth) / 2;
-        int y = panelY + 24;
-
+        int maxRows = Math.max(1, (height - BOTTOM_MARGIN - 44) / (CARD_HEIGHT + CARD_GAP));
+        int visibleRows = Math.min(rows.size(), maxRows);
+        hiddenRows = rows.size() - visibleRows;
+        firstRow = Math.clamp(firstRow, 0, hiddenRows);
+        panelHeight = 42 + visibleRows * (CARD_HEIGHT + CARD_GAP);
+        panelY = height - BOTTOM_MARGIN - panelHeight;
         List<Card> placed = new ArrayList<>(cards.size());
-        for (Card card : cards) {
-            placed.add(new Card(card.label(), x, y, card.width(), card.active(), card.onLeft(), card.onRight()));
-            x += card.width() + CARD_GAP;
+        for (int i = 0; i < visibleRows; i++) {
+            List<Card> visible = rows.get(firstRow + i);
+            int used = visible.stream().mapToInt(Card::width).sum() + (visible.size() - 1) * CARD_GAP;
+            int x = panelX + (panelWidth - used) / 2;
+            int y = panelY + 24 + i * (CARD_HEIGHT + CARD_GAP);
+            for (Card card : visible) {
+                placed.add(new Card(card.label(), x, y, card.width(), card.active(), card.onLeft(), card.onRight()));
+                x += card.width() + CARD_GAP;
+            }
         }
         return placed;
     }
@@ -145,19 +166,20 @@ public class MTRPanelScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        MTRWidgets.panel(graphics, panelX, panelY, PANEL_WIDTH, PANEL_HEIGHT,
+        List<Card> cards = buildCards();
+        MTRWidgets.panel(graphics, panelX, panelY, panelWidth, panelHeight,
                 MTRWidgets.PANEL_BG, MTRWidgets.PANEL_BORDER);
 
-        graphics.drawCenteredString(this.font, statusLine(), panelX + PANEL_WIDTH / 2, panelY + 7, MTRWidgets.TEXT);
+        graphics.drawCenteredString(this.font, statusLine(), panelX + panelWidth / 2, panelY + 7, MTRWidgets.TEXT);
 
-        for (Card card : buildCards()) {
+        for (Card card : cards) {
             boolean hovered = MTRWidgets.isOver(mouseX, mouseY, card.x(), card.y(), card.width(), CARD_HEIGHT);
             MTRWidgets.card(graphics, this.font, card.label(), card.x(), card.y(), card.width(), CARD_HEIGHT,
                     hovered, card.active());
         }
 
-        graphics.drawCenteredString(this.font, hintLine(), panelX + PANEL_WIDTH / 2,
-                panelY + PANEL_HEIGHT - 13, MTRWidgets.TEXT_DIM);
+        graphics.drawCenteredString(this.font, hintLine(), panelX + panelWidth / 2,
+                panelY + panelHeight - 13, MTRWidgets.TEXT_DIM);
 
         super.render(graphics, mouseX, mouseY, partialTick);
     }
@@ -206,6 +228,10 @@ public class MTRPanelScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        if (scrollY != 0 && hiddenRows > 0) {
+            firstRow = Math.clamp(firstRow - (int) Math.signum(scrollY), 0, hiddenRows);
+            return true;
+        }
         if (scrollY == 0 || !ClientReplayState.isWatching()) {
             return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
         }

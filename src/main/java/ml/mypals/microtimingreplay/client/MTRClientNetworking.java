@@ -2,8 +2,10 @@ package ml.mypals.microtimingreplay.client;
 
 import ml.mypals.microtimingreplay.config.RecordMode;
 import ml.mypals.microtimingreplay.client.screen.FilterScreen;
+import ml.mypals.microtimingreplay.client.screen.RecordingManagerScreen;
 import ml.mypals.microtimingreplay.client.screen.TimelineScreen;
 import ml.mypals.microtimingreplay.network.MTRPayloads;
+import ml.mypals.microtimingreplay.network.MTRPayloads.ManagerAction;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.screens.Screen;
 import net.fabricmc.api.EnvType;
@@ -33,6 +35,10 @@ public class MTRClientNetworking {
         ClientPlayNetworking.registerGlobalReceiver(MTRPayloads.FilterS2C.TYPE, (payload, context) ->
                 ClientReplayState.onFilter(payload.rows()));
 
+        ClientPlayNetworking.registerGlobalReceiver(MTRPayloads.ManagerS2C.TYPE, (payload, context) -> {
+            if (context.client().screen instanceof RecordingManagerScreen manager) manager.update(payload);
+        });
+
         ClientPlayNetworking.registerGlobalReceiver(MTRPayloads.OpenScreenS2C.TYPE, (payload, context) -> {
             Screen screen = switch (payload.screen()) {
                 case MTRPayloads.OpenScreenS2C.TIMELINE -> new TimelineScreen();
@@ -57,6 +63,38 @@ public class MTRClientNetworking {
 
     public static void sendHello() {
         send(new MTRPayloads.HelloC2S(MTRPayloads.PROTOCOL_VERSION));
+    }
+
+    public static boolean canManageRecordings() {
+        return ClientPlayNetworking.canSend(MTRPayloads.ManagerC2S.TYPE);
+    }
+
+    public static void requestManager(long requestId, String profile) {
+        send(new MTRPayloads.ManagerC2S(requestId, ManagerAction.BROWSE, profile, "", 0));
+    }
+
+    public static void createManagedProfile(long requestId, String name) {
+        send(new MTRPayloads.ManagerC2S(requestId, ManagerAction.CREATE, name, "", 0));
+    }
+
+    public static void editManagedProfile(long requestId, String profile, boolean finish) {
+        send(new MTRPayloads.ManagerC2S(requestId, finish ? ManagerAction.END_EDIT : ManagerAction.EDIT, profile, "", 0));
+    }
+
+    public static void highlightManagedArea(long requestId, String profile, String area) {
+        send(new MTRPayloads.ManagerC2S(requestId, ManagerAction.HIGHLIGHT, profile, area, 0));
+    }
+
+    public static void startManagedRecording(long requestId, String profile, int ticks) {
+        send(new MTRPayloads.ManagerC2S(requestId, ManagerAction.START, profile, "", ticks));
+    }
+
+    public static void stopManagedRecording(long requestId, String profile) {
+        send(new MTRPayloads.ManagerC2S(requestId, ManagerAction.STOP, profile, "", 0));
+    }
+
+    public static void stepManagedWorld(long requestId, String profile) {
+        send(new MTRPayloads.ManagerC2S(requestId, ManagerAction.STEP, profile, "", 1));
     }
 
     public static void requestTimeline() {

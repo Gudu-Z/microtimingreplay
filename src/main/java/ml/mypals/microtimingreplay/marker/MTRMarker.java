@@ -1,24 +1,21 @@
 package ml.mypals.microtimingreplay.marker;
 
 import com.mojang.math.Transformation;
-import ml.mypals.microtimingreplay.profile.MTRProfile;
+import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
+import net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket;
+import net.minecraft.server.level.ServerPlayer;
 import ml.mypals.microtimingreplay.util.DisplayUtils;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Brightness;
-import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.Display.BlockDisplay;
-import net.minecraft.world.entity.Display.TextDisplay;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
-
-import java.util.UUID;
 
 public final class MTRMarker {
 
@@ -47,82 +44,30 @@ public final class MTRMarker {
         DisplayUtils.spawnBlockDisplay(level, pos, blockState, scale, teamColor);
     }
 
-    public static void spawnAreaMarker(ServerLevel level, MTRProfile.Area area) {
-        BlockDisplay entity = new BlockDisplay(EntityType.BLOCK_DISPLAY, level);
-        
-        float width = Math.abs(area.x2 - area.x1) + 1.02f;
-        float height = Math.abs(area.y2 - area.y1) + 1.02f;
-        float depth = Math.abs(area.z2 - area.z1) + 1.02f;
-        
-        Vector3f scale = new Vector3f(width, height, depth);
-        
-        float minX = Math.min(area.x1, area.x2) - 0.01f;
-        float minY = Math.min(area.y1, area.y2) - 0.01f;
-        float minZ = Math.min(area.z1, area.z2) - 0.01f;
-        
-        entity.setPos(minX, minY, minZ);
-        entity.setBlockState(Blocks.PURPLE_STAINED_GLASS.defaultBlockState());
-        entity.setBrightnessOverride(new Brightness(15, 15));
-        
-        Transformation transform = new Transformation(new Vector3f(0, 0, 0), new Quaternionf(), scale, new Quaternionf());
-        entity.setTransformation(transform);
-        entity.setNoGravity(true);
-        entity.setInvulnerable(true);
-        entity.setSilent(true);
-        entity.addTag("mtr_area_marker");
-        entity.addTag("mtr_replay_marker");
-        
-        entity.setGlowingTag(true);
-        if (ChatFormatting.LIGHT_PURPLE.getColor() != null) {
-            entity.setGlowColorOverride(ChatFormatting.LIGHT_PURPLE.getColor());
-        }
-        level.addFreshEntity(entity);
-    }
+    /** A preview lives only on the requesting player's client, including vanilla clients. */
+    public static int showArea(ServerPlayer player, BlockPos first, BlockPos second,
+                               BlockState glass, ChatFormatting outline, double margin) {
+        BlockDisplay marker = new BlockDisplay(EntityType.BLOCK_DISPLAY, player.level());
+        marker.setPos(Math.min(first.getX(), second.getX()) - margin,
+                Math.min(first.getY(), second.getY()) - margin, Math.min(first.getZ(), second.getZ()) - margin);
+        var scale = new Vector3f((float) (Math.abs(first.getX() - second.getX()) + 1 + 2 * margin),
+                (float) (Math.abs(first.getY() - second.getY()) + 1 + 2 * margin),
+                (float) (Math.abs(first.getZ() - second.getZ()) + 1 + 2 * margin));
+        marker.setTransformation(new Transformation(new Vector3f(), new Quaternionf(), scale, new Quaternionf()));
+        marker.setBlockState(glass);
+        marker.setBrightnessOverride(new Brightness(15, 15));
+        marker.setGlowingTag(true);
+        marker.setGlowColorOverride(outline.getColor());
+        marker.setNoGravity(true);
 
-    public static BlockDisplay spawnOrUpdateDynamicAreaMarker(ServerLevel level, BlockDisplay existing, BlockPos p1, BlockPos p2) {
-        if (existing == null || existing.isRemoved()) {
-            existing = new BlockDisplay(EntityType.BLOCK_DISPLAY, level);
-            existing.setBlockState(Blocks.MAGENTA_STAINED_GLASS.defaultBlockState());
-            existing.setBrightnessOverride(new Brightness(15, 15));
-            existing.setNoGravity(true);
-            existing.setInvulnerable(true);
-            existing.setSilent(true);
-            existing.addTag("mtr_dynamic_marker");
-            existing.addTag("mtr_replay_marker");
-            existing.setGlowingTag(true);
-            if (ChatFormatting.LIGHT_PURPLE.getColor() != null) {
-                existing.setGlowColorOverride(ChatFormatting.LIGHT_PURPLE.getColor());
-            }
-            level.addFreshEntity(existing);
-        }
-        
-        float width = Math.abs(p2.getX() - p1.getX()) + 1.02f;
-        float height = Math.abs(p2.getY() - p1.getY()) + 1.02f;
-        float depth = Math.abs(p2.getZ() - p1.getZ()) + 1.02f;
-        
-        Vector3f scale = new Vector3f(width, height, depth);
-        
-        float minX = Math.min(p1.getX(), p2.getX()) - 0.01f;
-        float minY = Math.min(p1.getY(), p2.getY()) - 0.01f;
-        float minZ = Math.min(p1.getZ(), p2.getZ()) - 0.01f;
-        
-        existing.setPos(minX, minY, minZ);
-        Transformation transform = new Transformation(new Vector3f(0, 0, 0), new Quaternionf(), scale, new Quaternionf());
-        existing.setTransformation(transform);
-        
-        existing.setTransformationInterpolationDuration(1);
-        existing.setTransformationInterpolationDelay(0);
-        existing.setPosRotInterpolationDuration(1);
-        
-        return existing;
+        int id = marker.getId();
+        player.connection.send(new ClientboundAddEntityPacket(id, marker.getUUID(), marker.getX(), marker.getY(),
+                marker.getZ(), 0, 0, EntityType.BLOCK_DISPLAY, 0, Vec3.ZERO, 0));
+        player.connection.send(new ClientboundSetEntityDataPacket(id, marker.getEntityData().getNonDefaultValues()));
+        return id;
     }
 
     public static void spawnBlockDisplay(ServerLevel level, Vec3 pos, BlockState blockState, Vector3f scale, ChatFormatting teamColor) {
         DisplayUtils.spawnBlockDisplay(level, pos, blockState, scale, teamColor);
-    }
-
-    public static void removeEntity(ServerLevel level, UUID uuid) {
-        var entity = level.getEntity(uuid);
-        if (entity != null) entity.discard();
     }
 }

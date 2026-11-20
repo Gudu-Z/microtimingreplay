@@ -83,6 +83,28 @@ class MinecraftCompatibilityTest {
     }
 
     @Test
+    void managementPacketsKeepBrowsingEditingAndRecordingProfilesDistinct() {
+        var buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
+        try {
+            for (var action : MTRPayloads.ManagerAction.values()) {
+                var request = new MTRPayloads.ManagerC2S(451L, action, "observer", "1", 20);
+                MTRPayloads.ManagerC2S.CODEC.encode(buffer, request);
+                assertEquals(request, MTRPayloads.ManagerC2S.CODEC.decode(buffer));
+            }
+            var area = new MTRPayloads.ManagerArea("1", "minecraft:overworld",
+                    new BlockPos(-9, 63, 41), new BlockPos(-4, 70, 44));
+            var state = new MTRPayloads.ManagerS2C(451L, true, List.of("observer", "clock", "piston"),
+                    "observer", List.of(area), "piston", "clock", 1, 20, true, false,
+                    false, Component.literal("Cannot stop this recording"));
+            MTRPayloads.ManagerS2C.CODEC.encode(buffer, state);
+            assertEquals(state, MTRPayloads.ManagerS2C.CODEC.decode(buffer));
+            assertFalse(buffer.isReadable());
+        } finally {
+            buffer.release();
+        }
+    }
+
+    @Test
     void timelineAndDetailsSurviveNetworkRoundTrip() {
         RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
         try {

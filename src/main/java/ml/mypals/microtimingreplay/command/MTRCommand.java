@@ -13,7 +13,7 @@ import ml.mypals.microtimingreplay.config.RecordMode;
 import ml.mypals.microtimingreplay.config.RecordingFilterConfig;
 import ml.mypals.microtimingreplay.replay.dialog.EventFilterScreenGenerator;
 import ml.mypals.microtimingreplay.replay.dialog.StackTraceScreenGenerator;
-import ml.mypals.microtimingreplay.marker.MTRMarker;
+import ml.mypals.microtimingreplay.event.SelectionEventHandler;
 import ml.mypals.microtimingreplay.network.MTRNetworking;
 import ml.mypals.microtimingreplay.profile.MTRProfile;
 import ml.mypals.microtimingreplay.profile.ProfileManager;
@@ -33,18 +33,9 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import java.util.List;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.Display;
-import net.minecraft.world.entity.Entity;
 
 public class MTRCommand {
-
-    private static String currentInfoProfile = null;
-
-    public static String getCurrentInfoProfile() {
-        return currentInfoProfile;
-    }
 
     public static final SuggestionProvider<CommandSourceStack> PROFILE_SUGGESTION = (context, builder) -> SharedSuggestionProvider.suggest(ProfileManager.listProfiles(), builder);
 
@@ -245,8 +236,10 @@ public class MTRCommand {
             return 0;
         }
 
-        MTRProfile profile = new MTRProfile(name);
-        ProfileManager.saveProfile(profile);
+        if (ProfileManager.createProfile(name) == null) {
+            context.getSource().sendFailure(MTRComponent.translatable("mtr.manager.create_failed", "Could not save profile %s.", name));
+            return 0;
+        }
 
         context.getSource().sendSuccess(() -> MTRComponent.translatable("commands.mtr.profile.created", "Profile created: %s", name), true);
         return infoProfile(context);
@@ -259,7 +252,9 @@ public class MTRCommand {
             return 0;
         }
 
+        if (!mayEditAreas(context.getSource(), name)) return 0;
         if (ProfileManager.deleteProfile(name)) {
+            SelectionEventHandler.forgetProfile(context.getSource().getServer(), name);
             context.getSource().sendSuccess(() -> MTRComponent.translatable("commands.mtr.profile.deleted", "Profile deleted: %s", name), true);
             return 1;
         } else {
@@ -296,58 +291,45 @@ public class MTRCommand {
         return 0;
     }
 
-        private static int infoProfile(CommandContext<CommandSourceStack> context) {
+    private static int infoProfile(CommandContext<CommandSourceStack> context) {
         String name = StringArgumentType.getString(context, "name");
         MTRProfile profile = ProfileManager.loadProfile(name);
-        if (profile != null) {
-            ServerLevel level = context.getSource().getLevel();
-            for (Entity entity : level.getAllEntities()) {
-                if (entity instanceof Display) {
-                    if (entity.getTags().contains("mtr_area_marker")) {
-                        entity.discard();
-                    }
-                }
-            }
-
-            if (name.equals(currentInfoProfile)) {
-                currentInfoProfile = null;
-                context.getSource().sendSuccess(() -> MTRComponent.translatable("commands.mtr.profile.hid_markers", "Hid area markers for profile: %s", name), false);
-            } else {
-                currentInfoProfile = name;
-                String currentDim = level.dimension().location().toString();
-                for (MTRProfile.Area area : profile.getAreas()) {
-                    if (area.dimension.equals(currentDim)) {
-                        MTRMarker.spawnAreaMarker(level, area);
-                    }
-                }
-                
-                context.getSource().sendSuccess(() -> MTRComponent.translatable("commands.mtr.profile.info", "Profile: %s\n- Created: %d\n- Ticks: %d\n- Frames: %d\n- Areas: %d", profile.getName(), profile.getCreatedAt(), profile.getTicksRecorded(), profile.getFrames().size(), profile.getAreas().size()), false);
-            }
-            return 1;
-        } else {
-            context.getSource().sendFailure(MTRComponent.translatable("commands.mtr.profile.not_found", "Profile not found: %s", name));
+        CommandSourceStack source = context.getSource();
+        if (profile == null) {
+            source.sendFailure(MTRComponent.translatable("commands.mtr.profile.not_found", "Profile not found: %s", name));
             return 0;
         }
+        if (source.getEntity() instanceof ServerPlayer player) {
+            if (name.equals(SelectionEventHandler.getEditingProfile(player))) {
+                SelectionEventHandler.clearSelection(player);
+                source.sendSuccess(() -> MTRComponent.translatable("commands.mtr.profile.hid_markers", "Hid area markers for profile: %s", name), false);
+                return 1;
+            }
+            SelectionEventHandler.selectProfile(player, profile);
+        }
+        source.sendSuccess(() -> MTRComponent.translatable("commands.mtr.profile.info", "Profile: %s\n- Created: %d\n- Ticks: %d\n- Frames: %d\n- Areas: %d",
+                name, profile.getCreatedAt(), profile.getTicksRecorded(), profile.getFrames().size(), profile.getAreas().size()), false);
+        return 1;
     }
 
-    public static void refreshAreaMarkers(ServerLevel level, MTRProfile profile) {
-        for (Entity entity : level.getAllEntities()) {
-            if (entity instanceof Display) {
-                if (entity.getTags().contains("mtr_area_marker")) {
-                    entity.discard();
-                }
-            }
+    private static boolean mayEditAreas(CommandSourceStack source, String name) {
+        if (!SelectionEventHandler.profileBusy(name)) return true;
+        source.sendFailure(MTRComponent.translatable("mtr.selection.busy", "Stop recording or replaying %s before editing its areas", name));
+        return false;
+    }
+
+    private static boolean saveAreas(CommandSourceStack source, MTRProfile profile) {
+        if (!ProfileManager.trySaveProfile(profile)) {
+            source.sendFailure(MTRComponent.translatable("mtr.selection.save_failed", "Could not save areas for %s", profile.getName()));
+            return false;
         }
-        String currentDim = level.dimension().location().toString();
-        for (MTRProfile.Area area : profile.getAreas()) {
-            if (area.dimension.equals(currentDim)) {
-                MTRMarker.spawnAreaMarker(level, area);
-            }
-        }
+        SelectionEventHandler.refreshProfile(source.getServer(), profile);
+        return true;
     }
 
     private static int addArea(CommandContext<CommandSourceStack> context, String areaName) throws CommandSyntaxException {
         String name = StringArgumentType.getString(context, "name");
+        if (!mayEditAreas(context.getSource(), name)) return 0;
         MTRProfile profile = ProfileManager.loadProfile(name);
         if (profile == null) {
             context.getSource().sendFailure(MTRComponent.translatable("commands.mtr.profile.not_found", "Profile not found: %s", name));
@@ -359,7 +341,7 @@ public class MTRCommand {
 
         String assignedName = profile.addArea(areaName, pos1, pos2, context.getSource().getLevel().dimension().location().toString());
         if (assignedName != null) {
-            ProfileManager.saveProfile(profile);
+            if (!saveAreas(context.getSource(), profile)) return 0;
             context.getSource().sendSuccess(() -> MTRComponent.translatable("commands.mtr.area.added", "Area added to profile '%s' with ID/Name: %s", name, assignedName), true);
             return 1;
         } else {
@@ -372,6 +354,7 @@ public class MTRCommand {
         String name = StringArgumentType.getString(context, "name");
         String areaName = StringArgumentType.getString(context, "area_name");
         
+        if (!mayEditAreas(context.getSource(), name)) return 0;
         MTRProfile profile = ProfileManager.loadProfile(name);
         if (profile == null) {
             context.getSource().sendFailure(MTRComponent.translatable("commands.mtr.profile.not_found", "Profile not found: %s", name));
@@ -379,7 +362,7 @@ public class MTRCommand {
         }
 
         if (profile.removeArea(areaName)) {
-            ProfileManager.saveProfile(profile);
+            if (!saveAreas(context.getSource(), profile)) return 0;
             context.getSource().sendSuccess(() -> MTRComponent.translatable("commands.mtr.area.removed_from_profile", "Area '%s' removed from profile '%s'", areaName, name), true);
             return 1;
         } else {
@@ -392,6 +375,7 @@ public class MTRCommand {
         String name = StringArgumentType.getString(context, "name");
         String areaName = StringArgumentType.getString(context, "area_name");
         
+        if (!mayEditAreas(context.getSource(), name)) return 0;
         MTRProfile profile = ProfileManager.loadProfile(name);
         if (profile == null) {
             context.getSource().sendFailure(MTRComponent.translatable("commands.mtr.profile.not_found", "Profile not found: %s", name));
@@ -402,7 +386,7 @@ public class MTRCommand {
         BlockPos pos2 = BlockPosArgument.getBlockPos(context, "pos2");
 
         if (profile.modifyAreaPos(areaName, pos1, pos2)) {
-            ProfileManager.saveProfile(profile);
+            if (!saveAreas(context.getSource(), profile)) return 0;
             context.getSource().sendSuccess(() -> MTRComponent.translatable("commands.mtr.area.modified_coords", "Area '%s' coordinates updated.", areaName), true);
             return 1;
         } else {
@@ -416,6 +400,7 @@ public class MTRCommand {
         String areaName = StringArgumentType.getString(context, "area_name");
         String newName = StringArgumentType.getString(context, "new_name");
         
+        if (!mayEditAreas(context.getSource(), name)) return 0;
         MTRProfile profile = ProfileManager.loadProfile(name);
         if (profile == null) {
             context.getSource().sendFailure(MTRComponent.translatable("commands.mtr.profile.not_found", "Profile not found: %s", name));
@@ -423,7 +408,7 @@ public class MTRCommand {
         }
 
         if (profile.renameArea(areaName, newName)) {
-            ProfileManager.saveProfile(profile);
+            if (!saveAreas(context.getSource(), profile)) return 0;
             context.getSource().sendSuccess(() -> MTRComponent.translatable("commands.mtr.area.renamed", "Area '%s' renamed to '%s'", areaName, newName), true);
             return 1;
         } else {

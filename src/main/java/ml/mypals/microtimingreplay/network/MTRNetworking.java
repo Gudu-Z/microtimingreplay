@@ -41,6 +41,8 @@ public class MTRNetworking {
      * ends must agree on the type table before any handler is registered.
      */
     public static void registerTypes() {
+        PayloadTypeRegistry.playC2S().register(MTRPayloads.ManagerC2S.TYPE, MTRPayloads.ManagerC2S.CODEC);
+        PayloadTypeRegistry.playS2C().registerLarge(MTRPayloads.ManagerS2C.TYPE, MTRPayloads.ManagerS2C.CODEC, MAX_DETAILS_BYTES);
         PayloadTypeRegistry.playC2S().register(MTRPayloads.HelloC2S.TYPE, MTRPayloads.HelloC2S.CODEC);
         PayloadTypeRegistry.playC2S().register(MTRPayloads.SubscribeC2S.TYPE, MTRPayloads.SubscribeC2S.CODEC);
         PayloadTypeRegistry.playC2S().register(MTRPayloads.RequestTimelineC2S.TYPE, MTRPayloads.RequestTimelineC2S.CODEC);
@@ -75,6 +77,13 @@ public class MTRNetworking {
             MTRClientTracker.onHello(player, payload.protocol());
             ServerPlayNetworking.send(player, new MTRPayloads.HelloS2C(MTRPayloads.PROTOCOL_VERSION, isAllowed(player)));
             sendSessions(player);
+        });
+
+        ServerPlayNetworking.registerGlobalReceiver(MTRPayloads.ManagerC2S.TYPE, (request, context) -> {
+            ServerPlayer player = context.player();
+            if (ServerPlayNetworking.canSend(player, MTRPayloads.ManagerS2C.TYPE)) {
+                ServerPlayNetworking.send(player, RecordingManagerService.handle(player, request));
+            }
         });
 
         ServerPlayNetworking.registerGlobalReceiver(MTRPayloads.SubscribeC2S.TYPE, (payload, context) -> {

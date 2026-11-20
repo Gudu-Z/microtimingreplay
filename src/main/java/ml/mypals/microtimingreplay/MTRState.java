@@ -45,6 +45,14 @@ public class MTRState {
 
     public static MTRProfile getActiveProfile() { return activeProfile; }
 
+    public static int getRecordingCompletedTicks() {
+        return recordingClock == null ? 0 : recordingClock.completedTicks();
+    }
+
+    public static int getRecordingTargetTicks() {
+        return recordingClock == null ? 0 : recordingClock.targetTicks();
+    }
+
     /** All event timestamps use simulation time, including events during a frozen queue step. */
     public static long getRecordingTick() {
         return recordingClock == null ? 0 : recordingClock.currentTick();

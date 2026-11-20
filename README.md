@@ -9,7 +9,7 @@ The client component is optional on a dedicated server; installing it on the cli
 adds the timeline panel, shortcuts, and camera controls.
 
 Build with a JDK 21 or newer using `./gradlew build` (Windows: `gradlew.bat build`).
-The installable JAR is `build/libs/microtimingreplay-1.0.3+mc1.21.10.jar`;
+The installable JAR is `build/libs/microtimingreplay-1.0.4+mc1.21.10.jar`;
 the `-sources.jar` is for development only. The build runs Fabric-backed tests on
 both server and client environments, including Mixin target loading and recording/network serialization.
 
@@ -31,6 +31,7 @@ A Fabric mod for **recording** micro-timing events on the server over a period o
 - [Quick Start](#quick-start)
 - [Command Overview](#command-overview)
 - [Profile & Area Management](#profile--area-management)
+- [Recording manager](#recording-manager)
 - [Purple Dye Selection Tool](#purple-dye-selection-tool)
 - [Recording](#recording)
 - [Replay](#replay)
@@ -230,7 +231,7 @@ Delete a profile. **Irreversible.**
   **Also activates the [Purple Dye Selection Tool](#purple-dye-selection-tool).**
 - Second execution exits the viewing state; the selection tool is disabled accordingly.
 
-> This state is **server-wide unique**.
+Each player has their own editing profile. Switching profiles clears your unfinished selection.
 
 ### `/mtr profile area add <name> <pos1> <pos2> [area_name]`
 Add an axis-aligned area to the profile. The dimension is taken from **the dimension the command executor is currently in**.  
@@ -247,6 +248,12 @@ Change the two corner coordinates of an existing area (dimension stays the same)
 Rename an area. Fails if the new name is already taken.
 
 ---
+
+## Recording manager
+
+Hold **Left Alt**, choose **Recordings**, then release Alt. Select a profile to see its saved areas. Choose an area in your dimension to close the screen and highlight it in gold for about ten seconds. Choose **Edit areas**, then hold purple dye to see your target profile and corner count. Choose **Finish editing** to hide your previews.
+
+Enter a duration in game ticks and start recording. If the world is frozen, use the separate world-step button to advance one tick. The manager shows the freeze state and the number of ticks recorded.
 
 ## Purple Dye Selection Tool
 
@@ -404,7 +411,7 @@ All under the **Fabric config directory** (single-player `.minecraft/config/`, d
 - **Non-player entities inside the areas are backed up and restored.** On restore the entities inside the areas are first cleared, then rebuilt from the backup.
 - **No areas = no filtering.** A profile without any areas records every event in the whole world; use with caution.
 - `subscribe`, `unsubscribe`, `screen` and `dump` **must be executed by a player** (they either open a UI for the player or bind to a player). All other commands can be run from the console or command blocks.
-- The “currently viewed” state of `/mtr profile info` is a single server-wide variable; simultaneous operations by multiple players will interfere with each other.
+- Holding purple dye displays the name of your editing profile and how many corners you have selected. The save message includes both the profile name and the area name.
 
 ---
 

@@ -3,6 +3,7 @@ package ml.mypals.microtimingreplay.network;
 import ml.mypals.microtimingreplay.MicroTimingReplay;
 import ml.mypals.microtimingreplay.config.RecordMode;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentSerialization;
@@ -33,6 +34,67 @@ public class MTRPayloads {
     }
 
     // ── client → server ──────────────────────────────────────────────────────
+
+    public enum ManagerAction { BROWSE, CREATE, EDIT, HIGHLIGHT, START, STOP, STEP, END_EDIT }
+
+    public record ManagerC2S(long requestId, ManagerAction action, String profile, String area,
+                             int ticks) implements CustomPacketPayload {
+        public static final Type<ManagerC2S> TYPE = payloadType("manager_c2s");
+        public static final StreamCodec<RegistryFriendlyByteBuf, ManagerC2S> CODEC = StreamCodec.of(
+                (buf, request) -> {
+                    buf.writeVarLong(request.requestId);
+                    buf.writeEnum(request.action);
+                    buf.writeUtf(request.profile, 256);
+                    buf.writeUtf(request.area);
+                    buf.writeVarInt(request.ticks);
+                },
+                buf -> new ManagerC2S(buf.readVarLong(), buf.readEnum(ManagerAction.class),
+                        buf.readUtf(256), buf.readUtf(), buf.readVarInt()));
+
+        @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+    }
+
+    public record ManagerArea(String name, String dimension, BlockPos from, BlockPos to) {
+        private void write(FriendlyByteBuf buf) {
+            buf.writeUtf(name);
+            buf.writeUtf(dimension);
+            buf.writeBlockPos(from);
+            buf.writeBlockPos(to);
+        }
+
+        private static ManagerArea read(FriendlyByteBuf buf) {
+            return new ManagerArea(buf.readUtf(), buf.readUtf(), buf.readBlockPos(), buf.readBlockPos());
+        }
+    }
+
+    public record ManagerS2C(long requestId, boolean allowed, List<String> profiles, String selected,
+                             List<ManagerArea> areas, String editingProfile, String recordingProfile,
+                             int completedTicks, int targetTicks, boolean frozen, boolean canStep,
+                             boolean success, Component feedback) implements CustomPacketPayload {
+        public static final Type<ManagerS2C> TYPE = payloadType("manager_s2c");
+        public static final StreamCodec<RegistryFriendlyByteBuf, ManagerS2C> CODEC = StreamCodec.of(
+                (buf, state) -> {
+                    buf.writeVarLong(state.requestId);
+                    buf.writeBoolean(state.allowed);
+                    buf.writeCollection(state.profiles, (out, name) -> out.writeUtf(name, 256));
+                    buf.writeUtf(state.selected, 256);
+                    buf.writeCollection(state.areas, (out, area) -> area.write(out));
+                    buf.writeUtf(state.editingProfile, 256);
+                    buf.writeUtf(state.recordingProfile, 256);
+                    buf.writeVarInt(state.completedTicks);
+                    buf.writeVarInt(state.targetTicks);
+                    buf.writeBoolean(state.frozen);
+                    buf.writeBoolean(state.canStep);
+                    buf.writeBoolean(state.success);
+                    ComponentSerialization.STREAM_CODEC.encode(buf, state.feedback);
+                },
+                buf -> new ManagerS2C(buf.readVarLong(), buf.readBoolean(), buf.readList(in -> in.readUtf(256)),
+                        buf.readUtf(256), buf.readList(ManagerArea::read), buf.readUtf(256), buf.readUtf(256),
+                        buf.readVarInt(), buf.readVarInt(), buf.readBoolean(), buf.readBoolean(), buf.readBoolean(),
+                        ComponentSerialization.STREAM_CODEC.decode(buf)));
+
+        @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+    }
 
     /** Sent once on join; how the server learns this player can be talked to. */
     public record HelloC2S(int protocol) implements CustomPacketPayload {
