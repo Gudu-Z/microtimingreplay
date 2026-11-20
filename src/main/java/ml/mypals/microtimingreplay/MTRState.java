@@ -1,211 +1,208 @@
 package ml.mypals.microtimingreplay;
 
 import ml.mypals.microtimingreplay.compat.TickControl;
-import ml.mypals.microtimingreplay.replay.EntityReplayManager;
-
+import ml.mypals.microtimingreplay.event.EntityTickEvent;
+import ml.mypals.microtimingreplay.event.LevelTickEvent;
 import ml.mypals.microtimingreplay.event.MTREvent;
+import ml.mypals.microtimingreplay.event.PhaseEvent;
 import ml.mypals.microtimingreplay.profile.MTRProfile;
-import ml.mypals.microtimingreplay.record.RecordingBossBar;
 import ml.mypals.microtimingreplay.profile.ProfileManager;
+import ml.mypals.microtimingreplay.record.RecordingBossBar;
+import ml.mypals.microtimingreplay.record.RecordingClock;
 import ml.mypals.microtimingreplay.replay.ReplayManager;
 import ml.mypals.microtimingreplay.replay.WorldBackupManager;
 import ml.mypals.microtimingreplay.replay.stackTrace.StackTraceManager;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 
+import java.util.ArrayList;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Stack;
 
 public class MTRState {
-    /**
-     *  Only recording is global mode now;
-     *  replays are tracked by {@code ReplayManager}.
-     **/
-    public enum State {
-        IDLE,
-        RECORDING
-    }
+    /** Recording is exclusive; replays are tracked independently by ReplayManager. */
+    public enum State { IDLE, RECORDING }
 
     private static State currentState = State.IDLE;
-    private static MTRProfile activeProfile = null;
-    private static long recordStartTick = 0;
-    private static long recordTargetTick = -1;
-    private static boolean recordSubTickStep;
+    private static MTRProfile activeProfile;
+    private static RecordingClock recordingClock;
+    private static boolean recordingPaused;
+    private static final Map<MTREvent, Long> scopeActivity = new IdentityHashMap<>();
     public static final Stack<MTREvent> currentEventStack = new Stack<>();
 
-    public static State getCurrentState() {
-        return currentState;
-    }
+    public static State getCurrentState() { return currentState; }
 
     public static boolean isRecording(Level level) {
-        if (currentState != State.RECORDING)
+        if (currentState != State.RECORDING || recordingClock == null || recordingClock.finished())
             return false;
-        if (level != null && level.isClientSide())
-            return false;
-        if (MicroTimingReplay.server == null)
-            return false;
-        if (activeProfile == null)
-            return false;
+        if (level != null && level.isClientSide()) return false;
+        if (MicroTimingReplay.server == null || activeProfile == null) return false;
         return level == null || !activeProfile.outsideDimensionOrArea(level.dimension().location().toString());
     }
 
-    public static MTRProfile getActiveProfile() {
-        return activeProfile;
-    }
+    public static MTRProfile getActiveProfile() { return activeProfile; }
 
-    public static long getRecordStartTick() {
-        return recordStartTick;
+    /** All event timestamps use simulation time, including events during a frozen queue step. */
+    public static long getRecordingTick() {
+        return recordingClock == null ? 0 : recordingClock.currentTick();
     }
 
     public static boolean startRecording(String profileName, MinecraftServer server, int advance) {
-        // Recording is exclusive, and it cannot share the world with a replay: both
-        // rewrite the same blocks.
-        if (currentState != State.IDLE || ReplayManager.isAnyRunning()) {
-            return false;
-        }
+        if (currentState != State.IDLE || ReplayManager.isAnyRunning() || advance <= 0) return false;
         MTRProfile profile = ProfileManager.loadProfile(profileName);
-        if (profile == null)
-            return false;
+        if (profile == null) return false;
 
-        boolean wasFrozen = TickControl.isFrozen(server);
-        recordSubTickStep = !server.tickRateManager().isFrozen() && TickControl.isSubTickFrozen(server);
+        long baseTick = profile.getTicksRecorded();
+        for (var frame : profile.getFrames()) baseTick = Math.max(baseTick, frame.getTick());
+        List<String> dimensions = new ArrayList<>();
+        for (ServerLevel level : server.getAllLevels()) dimensions.add(level.dimension().location().getPath());
+        TickControl.FreezePhase frozen = TickControl.subTickFreezePhase(server);
+        recordingPaused = TickControl.isFrozen(server);
+        recordingClock = new RecordingClock(baseTick, advance, dimensions, TickControl.subTickPhaseCount(),
+                frozen == null ? null : frozen.dimensionPath(), frozen == null ? -1 : frozen.phase());
         currentState = State.RECORDING;
         activeProfile = profile;
-        recordStartTick = server.getTickCount() - profile.getTicksRecorded();
-        recordTargetTick = server.getTickCount() + advance;
         currentEventStack.clear();
+        scopeActivity.clear();
 
-        if (profile.getTicksRecorded() == 0) {
-            // Captures the whole starting population, players included (as mannequin
-            // stand-ins). Replay start restores it wholesale, so nothing that was
-            // already here needs a spawn event of its own.
+        if (profile.getTicksRecorded() == 0 && profile.getFrames().isEmpty()) {
+            // Partial recordings already have their initial snapshot and must retain it when appended.
             WorldBackupManager.backup(activeProfile, "record", true);
         }
-
         RecordingBossBar.start(server, profile.getName(), advance);
-
-        boolean stepped = TickControl.stepIfFrozen(server, advance);
-        if (wasFrozen && !stepped) {
-            // A pending SubTick queue step can reject a full-tick step. Do not
-            // leave a recording running against a world that cannot advance.
-            RecordingBossBar.stop();
-            currentState = State.IDLE;
-            activeProfile = null;
-            recordStartTick = 0;
-            recordTargetTick = -1;
-            recordSubTickStep = false;
-            currentEventStack.clear();
-            return false;
-        }
-
         return true;
     }
 
-    public static boolean isTimeFrozen(MinecraftServer server) {
-        return TickControl.isFrozen(server);
+    public static boolean isTimeFrozen(MinecraftServer server) { return TickControl.isFrozen(server); }
+
+    /** Called after vanilla has decided whether this loop will advance its simulation. */
+    public static void beginServerTick(MinecraftServer server) {
+        if (currentState == State.RECORDING && recordingClock != null) {
+            recordingPaused = TickControl.isFrozen(server);
+            recordingClock.beginServerTick(server.tickRateManager().runsNormally());
+        }
+    }
+
+    /** Optional SubTick hook. Rejected phases only count at the actual freeze boundary. */
+    public static void onSubTickPhase(ServerLevel level, int phase, boolean allowed) {
+        if (currentState != State.RECORDING || recordingClock == null || recordingClock.finished()) return;
+        String dimension = level.dimension().location().getPath();
+        boolean freezePoint = false;
+        if (!allowed && (recordingClock.subTickPhaseRunning() || recordingClock.needsSubTickAnchor()
+                || recordingClock.couldCompleteAt(dimension, phase))) {
+            TickControl.FreezePhase frozen = TickControl.subTickFreezePhase(level.getServer());
+            recordingPaused = frozen != null;
+            freezePoint = frozen != null && frozen.phase() == phase && frozen.dimensionPath().equals(dimension);
+        }
+        if (allowed) recordingPaused = false;
+        if (recordingClock.observeSubTickPhase(dimension, phase, allowed, freezePoint)
+                && !recordingClock.finished()) splitOpenPhases();
     }
 
     public static void stopRecording() {
-        if (currentState == State.RECORDING && activeProfile != null) {
-            long ticks = MicroTimingReplay.server.getTickCount() - recordStartTick;
-            activeProfile.setTicksRecorded((int) ticks);
-            ProfileManager.saveProfile(activeProfile);
-            StackTraceManager.collectAndSaveForProfile(activeProfile);
-            RecordingBossBar.stop();
-            currentState = State.IDLE;
-            activeProfile = null;
-            recordTargetTick = -1;
-            recordSubTickStep = false;
-            currentEventStack.clear();
-        }
+        if (currentState != State.RECORDING || activeProfile == null) return;
+        while (!currentEventStack.isEmpty()) popEvent();
+        pruneEmptyTail();
+        long ticks = recordingClock.completedTick();
+        // A manually stopped partial tick still owns its frame number on the next append.
+        for (var frame : activeProfile.getFrames())
+            if (!frame.getEvents().isEmpty()) ticks = Math.max(ticks, frame.getTick());
+        activeProfile.setTicksRecorded((int) ticks);
+        ProfileManager.saveProfile(activeProfile);
+        StackTraceManager.collectAndSaveForProfile(activeProfile);
+        RecordingBossBar.stop();
+        currentState = State.IDLE;
+        activeProfile = null;
+        recordingClock = null;
+        currentEventStack.clear();
+        scopeActivity.clear();
     }
 
     public static void checkAutoStop(MinecraftServer server) {
         if (currentState == State.RECORDING) {
-
             if (!currentEventStack.isEmpty()) {
-                MicroTimingReplay.LOGGER.warn(
-                        "Event stack was not empty at end of tick ({} entries left); discarding residue.",
+                MicroTimingReplay.LOGGER.warn("Event stack was not empty at end of tick ({} entries left); closing residue.",
                         currentEventStack.size());
-                currentEventStack.clear();
+                while (!currentEventStack.isEmpty()) popEvent();
             }
-            if (recordTargetTick != -1) {
-                RecordingBossBar.tick(server, recordTargetTick - server.getTickCount());
-                // SubTick can finish at a phase partway through the next loop.
-                // Keep that final segment, while still allowing manual unfreeze.
-                if (server.getTickCount() >= recordTargetTick
-                        && (!recordSubTickStep || !TickControl.isSubTickStepping(server))) {
-                    stopRecording();
-                }
-            }
+            recordingClock.endServerTick();
+            RecordingBossBar.tick(server, recordingClock.remainingTicks());
+            if (recordingClock.finished()) stopRecording();
         }
-        // Independent of recording: replays run on their own and there can be several.
         ReplayManager.tickAll(server);
     }
 
-    /** Replays cannot start mid-recording — both rewrite the same blocks. */
-    public static boolean canStartReplay() {
-        return currentState != State.RECORDING;
-    }
+    public static boolean canStartReplay() { return currentState != State.RECORDING; }
 
-    /**
-     * Puts one profile's area into the state its recording started from, saving the
-     * live scene first so {@link #endReplayWorld} can hand it back.
-     */
     public static void beginReplayWorld(MTRProfile profile) {
         WorldBackupManager.backup(profile, "replay", false);
-        // Entities present before the first recorded tick come back here as inert
-        // stand-ins, so they need no spawn events of their own.
         WorldBackupManager.restore(profile, "record", true);
     }
 
     public static void endReplayWorld(MTRProfile profile) {
-        if (profile != null) {
-            WorldBackupManager.restore(profile, "replay", false);
-        }
+        if (profile != null) WorldBackupManager.restore(profile, "replay", false);
     }
 
     public static void pushEvent(MTREvent event) {
-        if (currentState != State.RECORDING)
-            return;
-
-        if (currentEventStack.isEmpty()) {
-            activeProfile.addEvent(MicroTimingReplay.server.getTickCount() - recordStartTick, event);
-        } else {
-            currentEventStack.peek().addChild(event);
-        }
+        if (!isRecording(null)) return;
+        if (currentEventStack.isEmpty()) activeProfile.addEvent(getRecordingTick(), event);
+        else currentEventStack.peek().addChild(event);
         currentEventStack.push(event);
+        scopeActivity.put(event, recordingClock.activity());
     }
 
     public static void popEvent() {
-        if (currentState != State.RECORDING || currentEventStack.isEmpty())
-            return;
-
+        if (currentState != State.RECORDING || currentEventStack.isEmpty()) return;
         MTREvent popped = currentEventStack.pop();
-        if (popped.getChildren().isEmpty() && !popped.saveEvenWithoutAction(MicroTimingReplay.server)) {
-            if (!currentEventStack.isEmpty()) {
-                currentEventStack.peek().removeChild(popped);
-            } else {
-                long currentTick = MicroTimingReplay.server.getTickCount() - recordStartTick;
-                activeProfile.removeEvent(currentTick, popped);
-            }
+        Long began = scopeActivity.remove(popped);
+        boolean idlePhase = popped instanceof PhaseEvent && recordingPaused && !recordingClock.simulationRunning()
+                && began != null && began == recordingClock.activity();
+        // Players keep receiving ticks while the world is frozen; keep their actual actions,
+        // but do not fill an indefinitely paused recording with empty player containers.
+        boolean idlePlayer = popped instanceof EntityTickEvent entity && "minecraft:player".equals(entity.getEntityType())
+                && recordingPaused && !recordingClock.simulationRunning();
+        if (popped.getChildren().isEmpty()
+                && (idlePhase || idlePlayer || !popped.saveEvenWithoutAction(MicroTimingReplay.server))) {
+            if (!currentEventStack.isEmpty()) currentEventStack.peek().removeChild(popped);
+            else activeProfile.removeEvent(popped.getTick(), popped);
+            pruneEmptyTail();
         }
     }
 
     public static void recordStep(MTREvent step) {
-        if (currentState != State.RECORDING)
-            return;
+        if (!isRecording(null)) return;
+        if (currentEventStack.isEmpty()) activeProfile.addEvent(getRecordingTick(), step);
+        else currentEventStack.peek().addChild(step);
+    }
 
-        if (currentEventStack.isEmpty()) {
-            activeProfile.addEvent(MicroTimingReplay.server.getTickCount() - recordStartTick, step);
-        } else {
-            currentEventStack.peek().addChild(step);
+    /** SubTick can cross the recording's tick boundary inside a level tick wrapper. */
+    private static void splitOpenPhases() {
+        if (currentEventStack.isEmpty()) return;
+        List<MTREvent> reopened = new ArrayList<>(currentEventStack.size());
+        for (MTREvent event : currentEventStack) {
+            // shouldTick is outside block/entity/queue scopes; only phase wrappers span it.
+            if (!(event instanceof PhaseEvent phase)) return;
+            PhaseEvent next = phase instanceof LevelTickEvent level
+                    ? new LevelTickEvent(getRecordingTick(), level.getPhaseName(), level.getDimension())
+                    : new PhaseEvent(getRecordingTick(), phase.getPhaseName());
+            next.setStackTrace(event.getStackTrace());
+            reopened.add(next);
         }
+        while (!currentEventStack.isEmpty()) popEvent();
+        for (MTREvent event : reopened) pushEvent(event);
+    }
+
+    private static void pruneEmptyTail() {
+        var frames = activeProfile.getFrames();
+        while (!frames.isEmpty() && frames.getLast().getTick() > recordingClock.baseTick()
+                && frames.getLast().getEvents().isEmpty()) frames.removeLast();
     }
 
     public static void stoppingServer(MinecraftServer server) {
-        if (currentState == State.RECORDING) {
-            stopRecording();
-        }
+        if (currentState == State.RECORDING) stopRecording();
         ReplayManager.onServerStopping();
     }
 }

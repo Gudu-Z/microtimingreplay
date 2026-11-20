@@ -152,90 +152,310 @@ class TickControlTest {
     }
 
     @Test
-    void recordingKeepsFinalPartialTickUntilSubTickRefreezes(@TempDir Path worldRoot) throws Exception {
-        SubTickFixture fixture = frozenSubTick();
-        AtomicInteger tickCount = new AtomicInteger(100);
-        when(fixture.server.getTickCount()).thenAnswer(invocation -> tickCount.get());
-        when(fixture.server.getWorldPath(any(LevelResource.class))).thenReturn(worldRoot);
-        MinecraftServer previousServer = MicroTimingReplay.server;
-        MicroTimingReplay.server = fixture.server;
-        String profileName = "subtick-tail-" + UUID.randomUUID();
-        try {
-            MTRProfile profile = existingProfile(profileName);
-            int initialTicks = profile.getTicksRecorded();
-            assertTrue(MTRState.startRecording(profileName, fixture.server, 2));
+    void frozenVanillaRecordingWaitsForManualStepsAndIgnoresIdleLoops(@TempDir Path worldRoot) throws Exception {
+        MinecraftServer server = serverWithHandler(null);
+        server.tickRateManager().setFrozen(true);
+        server.tickRateManager().tick();
+        try (RecordingContext recording = new RecordingContext(server, worldRoot)) {
+            assertTrue(MTRState.startRecording(recording.profileName, server, 2));
+            assertTrue(server.tickRateManager().isFrozen());
+            assertFalse(server.tickRateManager().isSteppingForward(), "Recording must never issue /tick step");
+            for (int i = 0; i < 8; i++) recording.loop(() -> {});
             assertEquals(MTRState.State.RECORDING, MTRState.getCurrentState());
+            assertTrue(MTRState.getActiveProfile().getFrames().isEmpty());
+            assertEquals(1.0f, recordingProgress(), "Waiting while frozen must not consume the countdown");
 
-            fixture.serverTick();
-            tickCount.incrementAndGet();
-            MTRState.checkAutoStop(fixture.server);
-            fixture.serverTick();
-            tickCount.incrementAndGet();
-            assertTrue(TickControl.isSubTickStepping(fixture.server));
-            MTRState.checkAutoStop(fixture.server);
-            assertEquals(MTRState.State.RECORDING, MTRState.getCurrentState(),
-                    "The nominal deadline must not discard SubTick's final partial tick");
+            assertTrue(server.tickRateManager().stepGameIfPaused(1)); // Player's /tick step 1.
+            recording.loop(() -> recordBlockChangeIfActive(null));
+            assertEquals(MTRState.State.RECORDING, MTRState.getCurrentState());
+            assertEquals(0.5f, recordingProgress());
+            for (int i = 0; i < 5; i++) recording.loop(() -> {});
+            assertEquals(1, MTRState.getActiveProfile().getFrames().size());
+            assertEquals(0.5f, recordingProgress());
 
-            fixture.serverTick();
-            tickCount.incrementAndGet();
-            assertTrue(TickControl.isSubTickFrozen(fixture.server));
-            SetBlockEvent finalSegmentEvent = new SetBlockEvent(tickCount.get(), 3, 512, 0, 64, 0,
-                    Block.getId(Blocks.STONE.defaultBlockState()),
-                    Block.getId(Blocks.REDSTONE_BLOCK.defaultBlockState()), true, "minecraft:the_nether");
-            MTRState.recordStep(finalSegmentEvent);
-            MTRState.checkAutoStop(fixture.server);
+            assertTrue(server.tickRateManager().stepGameIfPaused(1));
+            recording.loop(() -> recordBlockChangeIfActive(null));
             assertEquals(MTRState.State.IDLE, MTRState.getCurrentState());
-            assertNull(MTRState.getActiveProfile());
-            MTRProfile recorded = ProfileManager.loadProfile(profileName);
-            assertNotNull(recorded);
-            assertEquals(initialTicks + 3, recorded.getTicksRecorded());
-            assertEquals(1, recorded.getFrames().size());
-            assertEquals(initialTicks + 3, recorded.getFrames().getFirst().getTick());
-            assertEquals(1, recorded.getFrames().getFirst().getEvents().size(),
-                    "The event from the final partial tick must survive saving");
-            assertInstanceOf(SetBlockEvent.class, recorded.getFrames().getFirst().getEvents().getFirst());
-        } finally {
-            try {
-                MTRState.stopRecording();
-                ProfileManager.deleteProfile(profileName);
-            } finally {
-                MicroTimingReplay.server = previousServer;
-            }
+            assertTrue(server.tickRateManager().isFrozen());
+            assertFrames(recording.savedProfile(), 3, List.of(2L, 3L));
         }
     }
 
     @Test
-    void rejectedSubTickStepRollsRecordingBackAndAllowsRetry(@TempDir Path worldRoot) throws Exception {
+    void frozenVanillaPlayerChangesAreRecordedWithoutConsumingTime(@TempDir Path worldRoot) throws Exception {
+        MinecraftServer server = serverWithHandler(null);
+        server.tickRateManager().setFrozen(true);
+        server.tickRateManager().tick();
+        try (RecordingContext recording = new RecordingContext(server, worldRoot)) {
+            assertTrue(MTRState.startRecording(recording.profileName, server, 3));
+            recordBlockChangeIfActive(null); // A real player/command edit, not an idle simulation loop.
+            for (int i = 0; i < 10; i++) recording.loop(() -> {});
+            assertEquals(MTRState.State.RECORDING, MTRState.getCurrentState());
+            assertEquals(1.0f, recordingProgress());
+            assertFalse(server.tickRateManager().isSteppingForward());
+            MTRState.stopRecording();
+            assertFrames(recording.savedProfile(), 2, List.of(2L));
+            assertTrue(server.tickRateManager().isFrozen());
+        }
+    }
+    @Test
+    void runningVanillaRecordingCountsRealTicksAndAppendsAfterManualEarlyStop(@TempDir Path worldRoot) throws Exception {
+        MinecraftServer server = serverWithHandler(null);
+        try (RecordingContext recording = new RecordingContext(server, worldRoot)) {
+            assertTrue(MTRState.startRecording(recording.profileName, server, 2));
+            recording.loop(() -> recordBlockChangeIfActive(null));
+            assertEquals(MTRState.State.RECORDING, MTRState.getCurrentState());
+            recording.loop(() -> recordBlockChangeIfActive(null));
+            assertEquals(MTRState.State.IDLE, MTRState.getCurrentState());
+            assertFrames(recording.savedProfile(), 3, List.of(2L, 3L));
+
+            server.tickRateManager().setFrozen(true);
+            server.tickRateManager().tick();
+            assertTrue(MTRState.startRecording(recording.profileName, server, 5));
+            for (int i = 0; i < 4; i++) recording.loop(() -> {});
+            assertTrue(server.tickRateManager().stepGameIfPaused(1));
+            recording.loop(() -> recordBlockChangeIfActive(null));
+            assertEquals(MTRState.State.RECORDING, MTRState.getCurrentState());
+            MTRState.stopRecording();
+            assertFrames(recording.savedProfile(), 4, List.of(2L, 3L, 4L));
+            assertTrue(server.tickRateManager().isFrozen());
+            assertNull(recordingBossBar());
+        }
+    }
+
+    @Test
+    void subtickRecordingWaitsForSeparateManualStepsAndPreservesTailAndAppend(@TempDir Path worldRoot) throws Exception {
         SubTickFixture fixture = frozenSubTick();
-        when(fixture.server.getTickCount()).thenReturn(100);
-        when(fixture.server.getWorldPath(any(LevelResource.class))).thenReturn(worldRoot);
+        Object frozenPhase = fixture.currentPhase();
+        try (RecordingContext recording = new RecordingContext(fixture.server, worldRoot)) {
+            assertTrue(MTRState.startRecording(recording.profileName, fixture.server, 2));
+            assertTrue(TickControl.isSubTickFrozen(fixture.server));
+            assertFalse(TickControl.isSubTickStepping(fixture.server));
+            assertEquals(0, fixture.remainingTicks());
+            for (int i = 0; i < 8; i++) recording.loop(fixture::serverTick);
+            assertEquals(frozenPhase, fixture.currentPhase());
+            assertEquals(MTRState.State.RECORDING, MTRState.getCurrentState());
+            assertTrue(MTRState.getActiveProfile().getFrames().isEmpty());
+            assertEquals(1.0f, recordingProgress());
+
+            fixture.manualStep(1);
+            recording.loop(() -> fixture.serverTick(TickControlTest::recordTailPhase));
+            assertTrue(TickControl.isSubTickStepping(fixture.server));
+            assertEquals(MTRState.State.RECORDING, MTRState.getCurrentState());
+            recording.loop(() -> fixture.serverTick(TickControlTest::recordTailPhase));
+            assertTrue(TickControl.isSubTickFrozen(fixture.server));
+            assertEquals(MTRState.State.RECORDING, MTRState.getCurrentState());
+            assertEquals(0.5f, recordingProgress());
+            assertEquals(1, MTRState.getActiveProfile().getFrames().size());
+            for (int i = 0; i < 6; i++) recording.loop(fixture::serverTick);
+            assertEquals(0.5f, recordingProgress());
+            assertEquals(1, MTRState.getActiveProfile().getFrames().size());
+
+            fixture.manualStep(1);
+            recording.loop(() -> fixture.serverTick(TickControlTest::recordTailPhase));
+            assertEquals(MTRState.State.RECORDING, MTRState.getCurrentState(),
+                    "The second step's final partial loop must remain recordable");
+            recording.loop(() -> fixture.serverTick(TickControlTest::recordTailPhase));
+            assertEquals(MTRState.State.IDLE, MTRState.getCurrentState());
+            assertEquals(frozenPhase, fixture.currentPhase());
+            assertFrames(recording.savedProfile(), 3, List.of(2L, 3L));
+
+            assertTrue(MTRState.startRecording(recording.profileName, fixture.server, 1));
+            assertTrue(TickControl.isSubTickFrozen(fixture.server));
+            for (int i = 0; i < 4; i++) recording.loop(fixture::serverTick);
+            fixture.manualStep(1);
+            recording.loop(() -> fixture.serverTick(TickControlTest::recordTailPhase));
+            recording.loop(() -> fixture.serverTick(TickControlTest::recordTailPhase));
+            assertEquals(MTRState.State.IDLE, MTRState.getCurrentState());
+            assertFrames(recording.savedProfile(), 4, List.of(2L, 3L, 4L));
+        }
+    }
+
+    @Test
+    void subtickQueueActivityDoesNotPreventStartingARecordingListener(@TempDir Path worldRoot) throws Exception {
+        SubTickFixture fixture = frozenSubTick();
         Object queues = fixture.handlerClass.getMethod("queues").invoke(fixture.handler);
         Field scheduled = queues.getClass().getField("scheduled");
         scheduled.setBoolean(queues, true);
-        MinecraftServer previousServer = MicroTimingReplay.server;
-        MicroTimingReplay.server = fixture.server;
-        String profileName = "subtick-rejected-" + UUID.randomUUID();
-        try {
-            existingProfile(profileName);
-            assertFalse(MTRState.startRecording(profileName, fixture.server, 2));
-            assertEquals(MTRState.State.IDLE, MTRState.getCurrentState());
-            assertNull(MTRState.getActiveProfile());
-            assertEquals(0, MTRState.getRecordStartTick());
-            assertTrue(MTRState.currentEventStack.isEmpty());
-            assertTrue(MTRState.canStartReplay());
-            Field bossBar = RecordingBossBar.class.getDeclaredField("bossBar");
-            bossBar.setAccessible(true);
-            assertNull(bossBar.get(null), "A rejected recording must remove its progress bar");
-            assertTrue(TickControl.isSubTickFrozen(fixture.server));
-            assertEquals(0, fixture.remainingTicks());
-            assertEquals(1, ProfileManager.loadProfile(profileName).getTicksRecorded());
-
-            scheduled.setBoolean(queues, false);
-            assertTrue(MTRState.startRecording(profileName, fixture.server, 2),
-                    "Once the queue step ends, the same recording can be started again");
+        try (RecordingContext recording = new RecordingContext(fixture.server, worldRoot)) {
+            assertTrue(MTRState.startRecording(recording.profileName, fixture.server, 2));
             assertEquals(MTRState.State.RECORDING, MTRState.getCurrentState());
+            assertTrue(TickControl.isSubTickFrozen(fixture.server));
+            assertTrue(scheduled.getBoolean(queues), "Recording must not cancel or replace the player's queue step");
+            recordBlockChangeIfActive(fixture.levels.get(1)); // An actual queued/command block update while frozen.
+            assertEquals(0, fixture.remainingTicks());
+            for (int i = 0; i < 5; i++) recording.loop(fixture::serverTick);
+            assertEquals(1, MTRState.getActiveProfile().getFrames().size());
+            assertEquals(1.0f, recordingProgress());
+            MTRState.stopRecording();
+            assertFrames(recording.savedProfile(), 2, List.of(2L));
+            assertNull(recordingBossBar());
+            assertTrue(scheduled.getBoolean(queues));
+        }
+    }
+
+    @Test
+    void subtickManualStopPersistsOnlyCompletedSteps(@TempDir Path worldRoot) throws Exception {
+        SubTickFixture fixture = frozenSubTick();
+        try (RecordingContext recording = new RecordingContext(fixture.server, worldRoot)) {
+            assertTrue(MTRState.startRecording(recording.profileName, fixture.server, 5));
+            fixture.manualStep(1);
+            recording.loop(() -> fixture.serverTick(TickControlTest::recordTailPhase));
+            recording.loop(() -> fixture.serverTick(TickControlTest::recordTailPhase));
+            for (int i = 0; i < 9; i++) recording.loop(fixture::serverTick);
+            assertEquals(MTRState.State.RECORDING, MTRState.getCurrentState());
+            MTRState.stopRecording();
+            assertFrames(recording.savedProfile(), 2, List.of(2L));
+            assertTrue(TickControl.isSubTickFrozen(fixture.server));
+            assertFalse(TickControl.isSubTickStepping(fixture.server));
+        }
+    }
+
+    @Test
+    void subtickManualStopRetainsPartialFrameAndDoesNotCancelPlayerStep(@TempDir Path worldRoot) throws Exception {
+        SubTickFixture fixture = frozenSubTick();
+        try (RecordingContext recording = new RecordingContext(fixture.server, worldRoot)) {
+            assertTrue(MTRState.startRecording(recording.profileName, fixture.server, 5));
+            fixture.manualStep(1);
+            recording.loop(() -> fixture.serverTick((level, phase) -> {
+                if (level.dimension().equals(Level.NETHER) && phase == fixture.blockTickPhase) {
+                    recordBlockChangeIfActive(level);
+                }
+            }));
             assertTrue(TickControl.isSubTickStepping(fixture.server));
-        } finally {
+            MTRState.stopRecording();
+            assertFrames(recording.savedProfile(), 2, List.of(2L));
+            assertTrue(TickControl.isSubTickStepping(fixture.server), "Stopping recording must not stop the player's step");
+            recording.loop(fixture::serverTick);
+            assertTrue(TickControl.isSubTickFrozen(fixture.server));
+
+            assertTrue(MTRState.startRecording(recording.profileName, fixture.server, 1));
+            fixture.manualStep(1);
+            recording.loop(() -> fixture.serverTick(TickControlTest::recordTailPhase));
+            recording.loop(() -> fixture.serverTick(TickControlTest::recordTailPhase));
+            assertFrames(recording.savedProfile(), 3, List.of(2L, 3L));
+        }
+    }
+
+    @Test
+    void vanillaFreezeAndStepCommandsInOneLoopDoNotCountThePreviousTick(@TempDir Path worldRoot) throws Exception {
+        MinecraftServer server = serverWithHandler(null);
+        try (RecordingContext recording = new RecordingContext(server, worldRoot)) {
+            server.tickRateManager().tick();
+            MTRState.beginServerTick(server); // This loop began before recording was requested.
+            server.tickRateManager().setFrozen(true);
+            assertTrue(MTRState.startRecording(recording.profileName, server, 1));
+            assertFalse(server.tickRateManager().isSteppingForward());
+            assertTrue(server.tickRateManager().stepGameIfPaused(1));
+            MTRState.checkAutoStop(server);
+            assertEquals(MTRState.State.RECORDING, MTRState.getCurrentState());
+            assertEquals(1.0f, recordingProgress());
+            assertTrue(MTRState.getActiveProfile().getFrames().isEmpty());
+
+            recording.loop(() -> recordBlockChangeIfActive(null));
+            assertEquals(MTRState.State.IDLE, MTRState.getCurrentState());
+            assertFrames(recording.savedProfile(), 2, List.of(2L));
+            assertTrue(server.tickRateManager().isFrozen());
+        }
+    }
+
+    @Test
+    void subtickRecordingStopsAtBudgetWithoutTruncatingLargerPlayerStep(@TempDir Path worldRoot) throws Exception {
+        SubTickFixture fixture = frozenSubTick();
+        try (RecordingContext recording = new RecordingContext(fixture.server, worldRoot)) {
+            assertTrue(MTRState.startRecording(recording.profileName, fixture.server, 1));
+            fixture.manualStep(3);
+            recording.loop(() -> fixture.serverTick(TickControlTest::recordTailPhase));
+            assertEquals(MTRState.State.RECORDING, MTRState.getCurrentState());
+            recording.loop(() -> fixture.serverTick(TickControlTest::recordTailPhase));
+            assertEquals(MTRState.State.IDLE, MTRState.getCurrentState());
+            assertFrames(recording.savedProfile(), 2, List.of(2L));
+            assertTrue(TickControl.isSubTickStepping(fixture.server),
+                    "Reaching the recording budget must not cancel the player's larger /tick step");
+            assertEquals(1, fixture.remainingTicks());
+
+            recording.loop(() -> fixture.serverTick(TickControlTest::recordTailPhase));
+            recording.loop(() -> fixture.serverTick(TickControlTest::recordTailPhase));
+            assertTrue(TickControl.isSubTickFrozen(fixture.server));
+            assertFrames(recording.savedProfile(), 2, List.of(2L));
+        }
+    }
+    private static void recordTailPhase(ServerLevel level, int phase) {
+        // TIME (2) is the final phase before refreezing at Nether BLOCK_TICK (3).
+        if (level.dimension().equals(Level.NETHER) && phase == 2) recordBlockChangeIfActive(level);
+    }
+
+    private static void recordBlockChangeIfActive(ServerLevel level) {
+        if (!MTRState.isRecording(level)) return;
+        long tick = MTRState.getRecordingTick();
+        MTRState.recordStep(new SetBlockEvent(tick, 3, 512, 0, 64, 0,
+                Block.getId(Blocks.STONE.defaultBlockState()),
+                Block.getId(Blocks.REDSTONE_BLOCK.defaultBlockState()), true,
+                level == null ? "minecraft:overworld" : level.dimension().location().toString()));
+    }
+
+    private static void assertFrames(MTRProfile profile, int recordedTicks, List<Long> frameTicks) {
+        assertNotNull(profile);
+        assertEquals(recordedTicks, profile.getTicksRecorded());
+        assertEquals(frameTicks, profile.getFrames().stream().map(frame -> frame.getTick()).toList());
+        for (var frame : profile.getFrames()) {
+            assertEquals(1, frame.getEvents().size());
+            assertInstanceOf(SetBlockEvent.class, frame.getEvents().getFirst());
+            assertEquals(frame.getTick(), frame.getEvents().getFirst().getTick(),
+                    "Event timestamps and frame indices must share the recording clock");
+        }
+    }
+
+    private static net.minecraft.server.level.ServerBossEvent recordingBossBar() throws Exception {
+        Field field = RecordingBossBar.class.getDeclaredField("bossBar");
+        field.setAccessible(true);
+        return (net.minecraft.server.level.ServerBossEvent) field.get(null);
+    }
+
+    private static float recordingProgress() throws Exception {
+        assertNotNull(recordingBossBar());
+        return recordingBossBar().getProgress();
+    }
+
+    @FunctionalInterface
+    private interface TickWork {
+        void run() throws Exception;
+    }
+
+    @FunctionalInterface
+    private interface PhaseWork {
+        void run(ServerLevel level, int phase) throws Exception;
+    }
+
+    private static final class RecordingContext implements AutoCloseable {
+        final MinecraftServer server;
+        final String profileName = "manual-recording-" + UUID.randomUUID();
+        final MinecraftServer previousServer;
+        final AtomicInteger tickCount = new AtomicInteger(100);
+
+        RecordingContext(MinecraftServer server, Path worldRoot) {
+            this.server = server;
+            this.previousServer = MicroTimingReplay.server;
+            when(server.getTickCount()).thenAnswer(invocation -> tickCount.get());
+            when(server.getWorldPath(any(LevelResource.class))).thenReturn(worldRoot);
+            MicroTimingReplay.server = server;
+            existingProfile(profileName);
+        }
+
+        void loop(TickWork worldWork) throws Exception {
+            tickCount.incrementAndGet();
+            server.tickRateManager().tick();
+            MTRState.beginServerTick(server);
+            worldWork.run();
+            MTRState.checkAutoStop(server);
+        }
+
+        MTRProfile savedProfile() {
+            return ProfileManager.loadProfile(profileName);
+        }
+
+        @Override
+        public void close() {
             try {
                 MTRState.stopRecording();
                 ProfileManager.deleteProfile(profileName);
@@ -244,7 +464,6 @@ class TickControlTest {
             }
         }
     }
-
     private static MTRProfile existingProfile(String name) {
         assertEquals(MTRState.State.IDLE, MTRState.getCurrentState());
         MTRProfile profile = new MTRProfile(name);
@@ -262,6 +481,7 @@ class TickControlTest {
         PlayerList players = mock(PlayerList.class);
         when(players.getPlayers()).thenReturn(List.of());
         when(server.getPlayerList()).thenReturn(players);
+        when(server.getAllLevels()).thenReturn(List.of());
         when(server.isRunning()).thenReturn(true);
         when(server.isStopped()).thenReturn(false);
         when(server.tickRateManager()).thenReturn(new ServerTickRateManager(server));
@@ -338,12 +558,22 @@ class TickControlTest {
             return remaining.getInt(handler);
         }
 
+        void manualStep(int ticks) throws Exception {
+            assertEquals(1, handlerClass.getMethod("step", CommandSourceStack.class, int.class, int.class)
+                    .invoke(handler, source(server, levels.get(1)), ticks, blockTickPhase));
+        }
+
         void serverTick() throws Exception {
+            serverTick((level, phase) -> {});
+        }
+
+        void serverTick(PhaseWork worldWork) throws Exception {
             int lastPhase = phaseClass.getField("ENTITY_MANAGEMENT").getInt(null);
             for (ServerLevel level : levels) {
                 for (int phase = 0; phase <= lastPhase; phase++) {
-                    handlerClass.getMethod("shouldTick", ServerLevel.class, int.class)
+                    boolean allowed = (boolean) handlerClass.getMethod("shouldTick", ServerLevel.class, int.class)
                             .invoke(handler, level, phase);
+                    if (allowed) worldWork.run(level, phase);
                 }
             }
         }

@@ -93,7 +93,7 @@ public abstract class PistonStructureResolverMixin {
             blockingBlock = BuiltInRegistries.BLOCK.getKey(blockingState.getBlock()).toString();
         }
 
-        long tick = serverLevel.getServer().getTickCount() - MTRState.getRecordStartTick();
+        long tick = MTRState.getRecordingTick();
         MTRState.recordStep(new PistonStructureEvent(
                 tick,
                 this.pistonPos,

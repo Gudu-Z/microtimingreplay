@@ -434,20 +434,18 @@ public class MTRCommand {
 
     private static int startRecord(CommandContext<CommandSourceStack> context) {
         String name = StringArgumentType.getString(context, "name");
-        int advance = IntegerArgumentType.getInteger(context, "ticks");
-        // SubTick changes FROZEN to STEPPING as soon as recording starts.
-        boolean wasTimeFrozen = MTRState.isTimeFrozen(context.getSource().getServer());
-        
-        if (!MTRState.startRecording(name, context.getSource().getServer(), advance)) {
-            context.getSource().sendFailure(MTRComponent.translatable("commands.mtr.record.start_failed", "Failed to start recording (already running, profile not found, or frozen time cannot be stepped)"));
+        int ticks = IntegerArgumentType.getInteger(context, "ticks");
+        var server = context.getSource().getServer();
+        if (!MTRState.startRecording(name, server, ticks)) {
+            context.getSource().sendFailure(MTRComponent.translatable("commands.mtr.record.start_failed", "Failed to start recording (profile not found or a recording or replay is active)"));
             return 0;
         }
 
-        context.getSource().sendSuccess(() -> MTRComponent.translatable("commands.mtr.record.started_ticks", "Started recording for %d ticks", advance), true);
-        if (!wasTimeFrozen) {
+        context.getSource().sendSuccess(() -> MTRComponent.translatable("commands.mtr.record.started_ticks", "Started recording for %d ticks", ticks), true);
+        if (MTRState.isTimeFrozen(server)) {
             context.getSource().sendSystemMessage(MTRComponent.translatable(
-                    "commands.mtr.record.not_frozen_hint",
-                    "Time is not frozen, so the world was not stepped. Recording is running and will stop on schedule; run /tick freeze first for a controlled capture."));
+                    "commands.mtr.record.frozen_hint",
+                    "Time is frozen. Use /tick step 1 to advance the recording by one game tick."));
         }
         return 1;
     }

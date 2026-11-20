@@ -9,12 +9,12 @@ The client component is optional on a dedicated server; installing it on the cli
 adds the timeline panel, shortcuts, and camera controls.
 
 Build with a JDK 21 or newer using `./gradlew build` (Windows: `gradlew.bat build`).
-The installable JAR is `build/libs/microtimingreplay-1.0.2+mc1.21.10.jar`;
+The installable JAR is `build/libs/microtimingreplay-1.0.3+mc1.21.10.jar`;
 the `-sources.jar` is for development only. The build runs Fabric-backed tests on
 both server and client environments, including Mixin target loading and recording/network serialization.
 
-SubTick 2.3 is optional: frozen recordings use its tick controller and retain the
-current dimension and phase. Recording waits for the final phase of a SubTick step.
+With vanilla or SubTick 2.3, recording waits for you to step or unfreeze the game.
+Time spent waiting does not count toward the recording duration.
 To run the optional compatibility tests with local SubTick, Carpet, and MaLiLib JARs:
 `./gradlew test clientTest -PsubtickCompatMods=/path/to/mods`.
 
@@ -148,6 +148,7 @@ A trailing `∅` (empty-set symbol) indicates an **empty node** that produced no
 
 ```
 /mtr record test 20
+/tick step 20
 ```
 
 Recording stops automatically after 20 gt (or you can stop it manually with `/mtr record stop`).

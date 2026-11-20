@@ -29,7 +29,7 @@ public class GameEventDispatcherMixin {
             if (profile != null && !profile.outsideAreaVec3(vec3, dim)) {
                 MTRState.recordStep(
                         new PostGameEventEvent(
-                                serverLevel.getServer().getTickCount() - MTRState.getRecordStartTick(),
+                                MTRState.getRecordingTick(),
                                 vec3.x(), vec3.y(), vec3.z(),
                                 context.affectedState() != null ? Block.getId(context.affectedState()) : -1,
                                 context.sourceEntity() != null ? context.sourceEntity().getStringUUID() : "",
@@ -50,7 +50,7 @@ public class GameEventDispatcherMixin {
             if (profile != null && !profile.outsideAreaVec3(vec3, dim)) {
                 MTRState.recordStep(
                         new PostGameEventEvent(
-                                serverLevel.getServer().getTickCount() - MTRState.getRecordStartTick(),
+                                MTRState.getRecordingTick(),
                                 vec3.x(), vec3.y(), vec3.z(),
                                 context.affectedState() != null ? Block.getId(context.affectedState()) : -1,
                                 context.sourceEntity() != null ? context.sourceEntity().getStringUUID() : "",

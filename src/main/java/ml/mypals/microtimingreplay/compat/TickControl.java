@@ -25,6 +25,24 @@ public final class TickControl {
         return server != null && frozenSubTickHandler(server) != null;
     }
 
+    public static int subTickPhaseCount() {
+        return SubTickHolder.ACCESS == null ? 0 : SubTickHolder.ACCESS.totalPhases;
+    }
+
+    public record FreezePhase(String dimensionPath, int phase) {}
+
+    /** The next phase to run in a frozen SubTick world. */
+    public static FreezePhase subTickFreezePhase(MinecraftServer server) {
+        Object handler = server == null ? null : frozenSubTickHandler(server);
+        if (handler == null) return null;
+        try {
+            return SubTickHolder.ACCESS.readPhase(handler);
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+            warnAboutSubTick(e);
+            return null;
+        }
+    }
+
     /** SubTick's public frozen() is false both while stepping and after unfreezing. */
     public static boolean isSubTickStepping(MinecraftServer server) {
         if (server == null) return false;
@@ -50,19 +68,17 @@ public final class TickControl {
         if (handler == null) return false;
         SubTickAccess access = SubTickHolder.ACCESS;
         try {
-            Object phase = access.currentPhase.invoke(handler);
-            String dimensionPath = (String) access.phasePath.invoke(phase);
-            int phaseIndex = (int) access.phaseIndex.invoke(phase);
+            FreezePhase phase = access.readPhase(handler);
             // SubTick identifies dimensions by path, and its step command derives
             // the target dimension from the source. Preserve the actual freeze point.
             for (ServerLevel level : server.getAllLevels()) {
-                if (level.dimension().location().getPath().equals(dimensionPath)) {
+                if (level.dimension().location().getPath().equals(phase.dimensionPath())) {
                     CommandSourceStack source = server.createCommandSourceStack()
                             .withLevel(level).withSuppressedOutput();
-                    return (int) access.step.invoke(handler, source, ticks, phaseIndex) > 0;
+                    return (int) access.step.invoke(handler, source, ticks, phase.phase()) > 0;
                 }
             }
-            warnAboutSubTick(new IllegalStateException("Frozen dimension is unavailable: " + dimensionPath));
+            warnAboutSubTick(new IllegalStateException("Frozen dimension is unavailable: " + phase.dimensionPath()));
         } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
             warnAboutSubTick(e);
         }
@@ -105,7 +121,7 @@ public final class TickControl {
                 if (!state.trySetAccessible()) throw new IllegalAccessException("SubTick state is inaccessible");
                 return new SubTickAccess(tickHandler, handler.getMethod("frozen"),
                         handler.getMethod("currentPhase"), phase.getMethod("getPath"), phase.getMethod("phase"),
-                        handler.getMethod("step", CommandSourceStack.class, int.class, int.class), state);
+                        handler.getMethod("step", CommandSourceStack.class, int.class, int.class), state, phase.getField("totalPhases").getInt(null));
             } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
                 warnAboutSubTick(e);
                 return null;
@@ -114,5 +130,10 @@ public final class TickControl {
     }
 
     private record SubTickAccess(Method tickHandler, Method frozen, Method currentPhase,
-                                 Method phasePath, Method phaseIndex, Method step, Field state) {}
+                                 Method phasePath, Method phaseIndex, Method step, Field state, int totalPhases) {
+        FreezePhase readPhase(Object handler) throws ReflectiveOperationException {
+            Object current = currentPhase.invoke(handler);
+            return new FreezePhase((String) phasePath.invoke(current), (int) phaseIndex.invoke(current));
+        }
+    }
 }

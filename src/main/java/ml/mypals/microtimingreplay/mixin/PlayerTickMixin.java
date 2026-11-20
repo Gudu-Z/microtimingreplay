@@ -33,7 +33,7 @@ public abstract class PlayerTickMixin {
         }
 
         MTRState.pushEvent(new EntityTickEvent(
-                level.getServer().getTickCount() - MTRState.getRecordStartTick(),
+                MTRState.getRecordingTick(),
                 PlayerProxy.replayUuid(this.player).toString(),
                 PlayerProxy.typeKey(this.player),
                 this.player.getX(), this.player.getY(), this.player.getZ(),

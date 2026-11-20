@@ -67,7 +67,7 @@ public abstract class HopperTransferMixin {
                         int transferredCount = startCount - result.getCount();
 
                         if (transferredCount > 0) {
-                            long tick = MicroTimingReplay.server.getTickCount() - MTRState.getRecordStartTick();
+                            long tick = MTRState.getRecordingTick();
                             String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
 
                             MTRState.recordStep(new ItemTransferEvent(

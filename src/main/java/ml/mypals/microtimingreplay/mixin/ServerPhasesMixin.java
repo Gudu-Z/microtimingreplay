@@ -14,14 +14,18 @@ import net.minecraft.server.players.PlayerList;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.function.BooleanSupplier;
 
 @Mixin(MinecraftServer.class)
 public abstract class ServerPhasesMixin {
 
-    @Shadow
-    private int tickCount;
+    @Inject(method = "tickChildren", at = @At("HEAD"))
+    private void mtr$beginRecordingTick(BooleanSupplier hasTimeLeft, CallbackInfo ci) {
+        MTRState.beginServerTick((MinecraftServer) (Object) this);
+    }
 
     @Shadow
     public abstract ServerLevel overworld();
@@ -31,7 +35,7 @@ public abstract class ServerPhasesMixin {
     private void mtr$onProcessQueuedPackets(PacketProcessor instance, Operation<Void> original) {
         if (MTRState.isRecording(null) && PhaseType.PACKET_PROCESS.enabled()) {
             MTRState.pushEvent(new PhaseEvent(
-                    this.tickCount - MTRState.getRecordStartTick(),
+                    MTRState.getRecordingTick(),
                     PhaseType.PACKET_PROCESS
             ));
             try {
@@ -53,7 +57,7 @@ public abstract class ServerPhasesMixin {
             }
             String dim = level.dimension().location().toString();
             MTRState.pushEvent(new LevelTickEvent(
-                    this.tickCount - MTRState.getRecordStartTick(),
+                    MTRState.getRecordingTick(),
                     PhaseType.LEVEL_TICK,
                     dim
             ));
@@ -70,7 +74,7 @@ public abstract class ServerPhasesMixin {
     private void mtr$onTickAsyncTaskPhase(Operation<Void> original) {
         if (MTRState.isRecording(null) && PhaseType.ASYNC_TASK.enabled()) {
             MTRState.pushEvent(new PhaseEvent(
-                    this.tickCount - MTRState.getRecordStartTick(),
+                    MTRState.getRecordingTick(),
                     PhaseType.ASYNC_TASK
             ));
             try {
@@ -92,7 +96,7 @@ public abstract class ServerPhasesMixin {
                 return;
             }
             MTRState.pushEvent(new PhaseEvent(
-                    this.tickCount - MTRState.getRecordStartTick(),
+                    MTRState.getRecordingTick(),
                     PhaseType.PLAYER_TICK
             ));
             try {

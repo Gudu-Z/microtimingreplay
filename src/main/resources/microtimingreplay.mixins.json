@@ -18,6 +18,7 @@
     "ServerLevelQueuesMixin",
     "ServerPhasesMixin",
     "ServerNetworkPacketMixin",
+    "SubTickClockMixin",
     "VibrationSystemTickerMixin",
     "client.DisplayMixin"
   ],
